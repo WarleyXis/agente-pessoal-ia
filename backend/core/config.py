@@ -1,7 +1,7 @@
 # Este arquivo é o "painel de controle" do projeto.
-# Toda configuração do agente (nome, nível de log, ambiente) é lida
-# aqui, a partir do arquivo .env — nunca digitada direto nos outros
-# arquivos do código.
+# Toda configuração do agente (nome, nível de log, ambiente, qual
+# provedor de IA usar) é lida aqui, a partir do arquivo .env —
+# nunca digitada direto nos outros arquivos do código.
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,23 +16,23 @@ class Settings(BaseSettings):
     definido (str, int, etc).
     """
 
-    # model_config diz ao Pydantic ONDE procurar as variáveis:
-    # aqui, no arquivo .env, na mesma pasta do projeto.
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore",  # ignora variáveis extras que ainda não usamos
+        extra="ignore",
     )
 
-    # Cada linha abaixo é uma configuração.
-    # O valor depois do "=" é só um valor padrão — se existir a
-    # variável correspondente no .env, ela sempre tem prioridade.
-    agent_name: str = "JARVIS"          # nome do agente (vem de AGENT_NAME no .env)
-    log_level: str = "INFO"             # nível de detalhe dos logs
-    environment: str = "development"    # em qual ambiente está rodando
+    # --- identidade e comportamento geral ---
+    agent_name: str = "JARVIS"
+    log_level: str = "INFO"
+    environment: str = "development"
+
+    # --- provedor de modelo de linguagem (LLM) ---
+    # "ollama" hoje; no futuro pode virar "openai" sem mudar
+    # nenhum outro arquivo além deste e do llm_provider.py.
+    llm_provider: str = "ollama"
+    ollama_model: str = "llama3.2"
+    ollama_base_url: str = "http://localhost:11434"
 
 
-# Essa linha cria UMA instância pronta da configuração, já carregada
-# a partir do .env. É essa variável "settings" que o resto do
-# projeto vai importar e usar.
 settings = Settings()
