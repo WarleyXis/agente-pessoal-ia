@@ -2,10 +2,10 @@
 # se está conversando com o Ollama (local, grátis) ou com a OpenAI
 # (paga, na nuvem) ou qualquer outro provedor no futuro.
 #
-# Todo provedor de LLM (Large Language Model) implementa a mesma
-# "promessa": um método generate(prompt) que devolve uma resposta
-# em texto. O resto do código só conhece essa promessa, não o
-# provedor específico por trás dela.
+# Nesta fase, adicionamos suporte a "tools" (function calling): o
+# modelo pode responder pedindo para executar uma ferramenta, em vez
+# de só devolver texto. O formato é parecido entre Ollama e OpenAI,
+# o que facilita trocar de provedor depois.
 
 from abc import ABC, abstractmethod
 
@@ -15,54 +15,46 @@ from backend.core.config import settings
 
 
 class LLMProvider(ABC):
-    """
-    Interface (contrato) que todo provedor de modelo de linguagem
-    precisa seguir. ABC = Abstract Base Class: uma classe que não
-    pode ser usada diretamente, só serve de "molde" para outras.
-    """
+    """Interface que todo provedor de modelo de linguagem precisa seguir."""
 
     @abstractmethod
-    def generate(self, prompt: str) -> str:
-        """Recebe um texto de entrada e devolve a resposta do modelo."""
+    def chat(self, messages: list[dict], tools: list[dict] | None = None) -> dict:
+        """
+        Manda uma lista de mensagens (histórico da conversa) para o
+        modelo e devolve a resposta dele. Se 'tools' for passado, o
+        modelo pode escolher chamar uma ferramenta em vez de responder
+        direto com texto.
+        """
         raise NotImplementedError
 
 
 class OllamaProvider(LLMProvider):
-    """
-    Provedor que conversa com um modelo rodando localmente via Ollama.
-
-    O Ollama, depois de instalado, fica rodando em segundo plano
-    como um servidor na sua própria máquina, escutando em
-    http://localhost:11434. Nós apenas mandamos uma requisição HTTP
-    pra ele, como se fosse um site.
-    """
+    """Provedor que conversa com um modelo rodando localmente via Ollama."""
 
     def __init__(self, model: str, base_url: str) -> None:
         self.model = model
         self.base_url = base_url
 
-    def generate(self, prompt: str) -> str:
+    def chat(self, messages: list[dict], tools: list[dict] | None = None) -> dict:
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "stream": False,
+        }
+        if tools:
+            payload["tools"] = tools
+
         response = requests.post(
-            f"{self.base_url}/api/generate",
-            json={
-                "model": self.model,
-                "prompt": prompt,
-                "stream": False,  # queremos a resposta inteira de uma vez, não em pedaços
-            },
-            timeout=120,  # modelos locais podem demorar, principalmente na primeira chamada
+            f"{self.base_url}/api/chat",
+            json=payload,
+            timeout=120,
         )
-        response.raise_for_status()  # lança erro se o Ollama respondeu com problema
-        return response.json()["response"]
+        response.raise_for_status()
+        return response.json()["message"]
 
 
 def get_llm_provider() -> LLMProvider:
-    """
-    'Fábrica' que decide qual provedor usar, baseado na configuração.
-
-    Hoje só existe Ollama. Quando adicionarmos OpenAI (fase futura),
-    o único lugar que muda é aqui dentro — o resto do agente
-    continua exatamente igual.
-    """
+    """'Fábrica' que decide qual provedor usar, baseado na configuração."""
     if settings.llm_provider == "ollama":
         return OllamaProvider(
             model=settings.ollama_model,
