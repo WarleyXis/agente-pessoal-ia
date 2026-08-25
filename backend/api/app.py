@@ -1,30 +1,23 @@
 # Este arquivo cria a API HTTP do agente usando FastAPI. É através
-# dela que, futuramente, o frontend (React) e outras interfaces vão
-# conversar com o agente — em vez de só o terminal.
+# dela que o frontend (React) e outras interfaces conversam com o
+# agente — em vez de só o terminal.
 
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from backend.core.agent import Agent
 from backend.core.config import settings
 
 # Guardamos UMA instância do agente, criada uma única vez quando a
-# API sobe — não uma nova a cada requisição. Isso importa porque o
-# Agent carrega o histórico de memória na criação; criar um novo a
-# cada mensagem faria ele "esquecer" o que aconteceu na própria
-# requisição anterior da mesma conversa.
+# API sobe — não uma nova a cada requisição.
 agent: Agent | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Roda uma vez quando a API inicia (antes do 'yield') e uma vez
-    quando ela desliga (depois do 'yield'). É aqui que criamos o
-    Agent, em vez de criar um novo a cada chamada.
-    """
     global agent
     agent = Agent()
     yield
@@ -32,6 +25,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=f"{settings.agent_name} API", lifespan=lifespan)
+
+# CORS: autoriza o frontend (rodando em localhost:5173 durante o
+# desenvolvimento) a fazer requisições para esta API. Em produção
+# (Fase 20), essa lista seria restrita ao endereço real do app.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class ChatRequest(BaseModel):
