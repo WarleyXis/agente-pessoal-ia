@@ -33,8 +33,14 @@ class Agent:
             f"e prestativo. Responda sempre em português. Use as "
             f"ferramentas disponíveis quando forem úteis para responder "
             f"com precisão. Você tem acesso ao histórico da conversa "
-            f"abaixo — use-o para lembrar do que já foi dito."
+            f"abaixo — use-o para lembrar do que já foi dito.\n\n"
+            f"Quando uma ferramenta devolver um resultado (incluindo "
+            f"descrições visuais da tela do usuário), trate essa "
+            f"informação como algo que você observou diretamente e "
+            f"responda com base nela. Nunca negue ter acesso a uma "
+            f"informação depois que uma ferramenta já a forneceu."
         )
+        
         return (
             [{"role": "system", "content": system_prompt}]
             + self.history
@@ -75,7 +81,7 @@ class Agent:
             else:
                 result = tool.execute(**arguments)
 
-            messages.append({"role": "tool", "content": result})
+                messages.append({"role": "tool", "name": tool_name, "content": result})
 
         return messages, True
 

@@ -5,6 +5,7 @@
 
 from backend.tools.base import Tool
 from backend.tools.system_tools import GetCurrentTimeTool, ListFilesTool
+from backend.tools.vision_tools import DescribeScreenTool
 
 
 class ToolRegistry:
@@ -42,4 +43,6 @@ def build_default_registry() -> ToolRegistry:
     registry = ToolRegistry()
     registry.register(GetCurrentTimeTool())
     registry.register(ListFilesTool())
+    registry.register(DescribeScreenTool())
+    
     return registry
