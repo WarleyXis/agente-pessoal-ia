@@ -4,6 +4,7 @@
 # ferramenta X com esses argumentos".
 
 from backend.tools.base import Tool
+from backend.tools.computer_tools import ClickAtTool, OpenApplicationTool, TypeTextTool
 from backend.tools.system_tools import GetCurrentTimeTool, ListFilesTool
 from backend.tools.vision_tools import DescribeScreenTool
 
@@ -44,5 +45,8 @@ def build_default_registry() -> ToolRegistry:
     registry.register(GetCurrentTimeTool())
     registry.register(ListFilesTool())
     registry.register(DescribeScreenTool())
+    registry.register(OpenApplicationTool())
+    registry.register(ClickAtTool())
+    registry.register(TypeTextTool())
     
     return registry
