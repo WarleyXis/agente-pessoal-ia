@@ -1,5 +1,9 @@
-# Grava áudio do microfone por um tempo fixo e salva num arquivo
-# .wav — o formato que o Whisper (nosso transcritor) espera receber.
+# Grava do microfone continuamente, mas para sozinho quando detecta
+# silêncio — medindo o volume (RMS, "root mean square") de cada
+# pedaço de áudio, em vez de usar uma biblioteca externa de detecção
+# de fala. É uma técnica mais simples (não distingue fala de outros
+# ruídos altos), mas não depende de nenhuma compilação C, o que a
+# torna muito mais fácil de instalar.
 
 from pathlib import Path
 
@@ -7,32 +11,65 @@ import numpy as np
 import sounddevice as sd
 import wave
 
-SAMPLE_RATE = 16000  # 16kHz é o que o Whisper espera como entrada
+SAMPLE_RATE = 16000
+FRAME_MS = 30
+FRAME_SAMPLES = int(SAMPLE_RATE * FRAME_MS / 1000)
+
+# Volume mínimo (escala 0.0 a 1.0) para considerar que há fala.
+# Se o silêncio não for detectado, diminua este valor; se parar
+# cedo demais, aumente.
+SPEECH_THRESHOLD = 0.02
+
+SILENCE_LIMIT_MS = 1200
+MAX_RECORDING_MS = 30000
+
 RECORDING_PATH = Path("data") / "gravacao.wav"
 
 
-def record_audio(duration_seconds: int) -> str:
-    """Grava do microfone por 'duration_seconds' e devolve o caminho do arquivo salvo."""
-    RECORDING_PATH.parent.mkdir(parents=True, exist_ok=True)
+def _rms(frame: np.ndarray) -> float:
+    """Calcula o volume médio de um pedaço de áudio (0.0 = silêncio total)."""
+    return float(np.sqrt(np.mean(frame.astype(np.float64) ** 2)) / 32768)
 
-    print(f"🎙️  Gravando por {duration_seconds}s — fale agora!")
-    audio = sd.rec(
-        int(duration_seconds * SAMPLE_RATE),
-        samplerate=SAMPLE_RATE,
-        channels=1,
-        dtype="float32",
-    )
-    sd.wait()  # espera a gravação terminar antes de continuar
+
+def record_until_silence() -> str:
+    """
+    Grava do microfone até detectar silêncio contínuo (ou até o
+    limite máximo de segurança) e devolve o caminho do arquivo salvo.
+    """
+    frames: list[np.ndarray] = []
+    silent_ms = 0
+    started_talking = False
+    total_ms = 0
+
+    print("🎙️  Ouvindo... fale quando quiser (para sozinho no silêncio).")
+
+    with sd.InputStream(
+        samplerate=SAMPLE_RATE, blocksize=FRAME_SAMPLES, dtype="int16", channels=1
+    ) as stream:
+        while total_ms < MAX_RECORDING_MS:
+            frame, _ = stream.read(FRAME_SAMPLES)
+            frames.append(frame.copy())
+            total_ms += FRAME_MS
+
+            volume = _rms(frame)
+
+            if volume > SPEECH_THRESHOLD:
+                started_talking = True
+                silent_ms = 0
+            elif started_talking:
+                silent_ms += FRAME_MS
+                if silent_ms >= SILENCE_LIMIT_MS:
+                    break
+
     print("Gravação concluída.")
 
-    # O microfone grava em float32 (-1.0 a 1.0), mas o formato WAV
-    # padrão usa inteiros de 16 bits — convertemos aqui.
-    audio_int16 = (audio * 32767).astype(np.int16)
+    audio = np.concatenate(frames)
 
+    RECORDING_PATH.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(RECORDING_PATH), "wb") as wav_file:
         wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)  # 2 bytes = 16 bits
+        wav_file.setsampwidth(2)
         wav_file.setframerate(SAMPLE_RATE)
-        wav_file.writeframes(audio_int16.tobytes())
+        wav_file.writeframes(audio.tobytes())
 
     return str(RECORDING_PATH)

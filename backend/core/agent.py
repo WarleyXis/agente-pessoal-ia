@@ -1,10 +1,9 @@
-# O Agent agora tem memória: lembra das mensagens anteriores dentro
-# da mesma execução (memória de curto prazo) e também carrega o
-# histórico salvo em disco ao iniciar, então a conversa continua de
-# onde parou mesmo depois de fechar e abrir o programa de novo
-# (memória entre sessões).
+# O Agent sabe usar ferramentas e tem memória. A partir desta fase,
+# ganha também uma versão "streaming" da resposta — útil para o modo
+# de voz, onde queremos mostrar o texto aparecendo progressivamente.
 
 import json
+from typing import Iterator
 
 from backend.core.config import settings
 from backend.core.llm_provider import LLMProvider, get_llm_provider
@@ -25,12 +24,10 @@ class Agent:
         self.tool_registry = tool_registry or build_default_registry()
 
         memory_store.init_db()
-        # Carrega as últimas mensagens salvas como ponto de partida
-        # da conversa — é assim que o agente "lembra" de sessões
-        # anteriores.
         self.history: list[dict] = memory_store.load_recent_history()
 
-    def respond(self, user_message: str) -> str:
+    def _build_base_messages(self, user_message: str) -> list[dict]:
+        """Monta o histórico + mensagem atual, prontos para mandar ao modelo."""
         system_prompt = (
             f"Você é {settings.agent_name}, um assistente pessoal direto "
             f"e prestativo. Responda sempre em português. Use as "
@@ -38,58 +35,91 @@ class Agent:
             f"com precisão. Você tem acesso ao histórico da conversa "
             f"abaixo — use-o para lembrar do que já foi dito."
         )
-
-        messages = (
+        return (
             [{"role": "system", "content": system_prompt}]
             + self.history
             + [{"role": "user", "content": user_message}]
         )
 
-        message = self.llm_provider.chat(
-            messages, tools=self.tool_registry.schemas_for_llm()
-        )
+    def _resolve_tool_calls(
+        self, messages: list[dict], initial_message: dict
+    ) -> tuple[list[dict], bool]:
+        """
+        Recebe a primeira resposta do modelo. Se ela pedir ferramentas,
+        executa cada uma (respeitando aprovação de risco) e adiciona
+        os resultados ao histórico de mensagens.
 
-        tool_calls = message.get("tool_calls")
-
+        Devolve as mensagens atualizadas e um booleano indicando se
+        ainda é necessária uma chamada final ao modelo (True quando
+        ferramentas foram usadas).
+        """
+        tool_calls = initial_message.get("tool_calls")
         if not tool_calls:
-            final_text = message.get("content", "")
-        else:
-            messages.append(message)
+            return messages, False
 
-            for call in tool_calls:
-                tool_name = call["function"]["name"]
-                arguments = call["function"]["arguments"]
+        messages.append(initial_message)
 
-                if isinstance(arguments, str):
-                    arguments = json.loads(arguments)
+        for call in tool_calls:
+            tool_name = call["function"]["name"]
+            arguments = call["function"]["arguments"]
+            if isinstance(arguments, str):
+                arguments = json.loads(arguments)
 
-                tool = self.tool_registry.get(tool_name)
-                if tool is None:
-                    result = f"Ferramenta desconhecida: {tool_name}"
-                elif requires_approval(tool.risk_level) and not ask_approval(
-                    tool_name, arguments
-                ):
-                    result = "Ação não autorizada pelo usuário."
-                else:
-                    result = tool.execute(**arguments)
+            tool = self.tool_registry.get(tool_name)
+            if tool is None:
+                result = f"Ferramenta desconhecida: {tool_name}"
+            elif requires_approval(tool.risk_level) and not ask_approval(
+                tool_name, arguments
+            ):
+                result = "Ação não autorizada pelo usuário."
+            else:
+                result = tool.execute(**arguments)
 
-                messages.append({"role": "tool", "content": result})
+            messages.append({"role": "tool", "content": result})
 
-            final_message = self.llm_provider.chat(messages)
-            final_text = final_message.get("content", "")
+        return messages, True
 
-        # Guarda só a pergunta e a resposta final no histórico — não
-        # os detalhes intermediários de chamada de ferramenta, que
-        # não interessam para a continuidade da conversa.
+    def _save_turn(self, user_message: str, final_text: str) -> None:
+        """Salva a troca (pergunta + resposta) na memória de curto e longo prazo."""
         self.history.append({"role": "user", "content": user_message})
         self.history.append({"role": "assistant", "content": final_text})
-
-        # Mantém o histórico em memória de um tamanho razoável, para
-        # não estourar o limite de contexto do modelo numa sessão
-        # muito longa.
-        self.history = self.history[-memory_store.MAX_HISTORY_MESSAGES :]
+        self.history = self.history[-memory_store.MAX_HISTORY_MESSAGES:]
 
         memory_store.save_message("user", user_message)
         memory_store.save_message("assistant", final_text)
 
+    def respond(self, user_message: str) -> str:
+        """Resposta completa de uma vez (usada pelo terminal em texto e pela API)."""
+        messages = self._build_base_messages(user_message)
+        initial_message = self.llm_provider.chat(
+            messages, tools=self.tool_registry.schemas_for_llm()
+        )
+        messages, needs_final_call = self._resolve_tool_calls(messages, initial_message)
+
+        if needs_final_call:
+            final_message = self.llm_provider.chat(messages)
+            final_text = final_message.get("content", "")
+        else:
+            final_text = initial_message.get("content", "")
+
+        self._save_turn(user_message, final_text)
         return final_text
+
+    def respond_stream(self, user_message: str) -> Iterator[str]:
+        """Mesma lógica, mas devolve a resposta final em pedaços (usada pelo modo de voz)."""
+        messages = self._build_base_messages(user_message)
+        initial_message = self.llm_provider.chat(
+            messages, tools=self.tool_registry.schemas_for_llm()
+        )
+        messages, needs_final_call = self._resolve_tool_calls(messages, initial_message)
+
+        full_text = ""
+        if needs_final_call:
+            for chunk in self.llm_provider.chat_stream(messages):
+                full_text += chunk
+                yield chunk
+        else:
+            full_text = initial_message.get("content", "")
+            yield full_text
+
+        self._save_turn(user_message, full_text)

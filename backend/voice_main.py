@@ -1,14 +1,12 @@
-# Uma versão do "botão de ligar" que conversa por voz em vez de
-# texto: grava sua fala, transcreve, manda pro agente, e fala a
-# resposta em voz alta. Ainda por tempo fixo de gravação — "escutar
-# até você parar de falar" e interrupção em tempo real vêm na
-# Fase 8 (Realtime).
+# Modo de voz com escuta automática (para sozinha quando você para
+# de falar) e resposta em streaming (o texto aparece progressivamente
+# enquanto é gerado, antes de ser falado em voz alta).
 
 import logging
 
 from backend.core.agent import Agent
 from backend.core.config import settings
-from backend.voice.recorder import record_audio
+from backend.voice.recorder import record_until_silence
 from backend.voice.stt import transcribe_audio
 from backend.voice.tts import speak
 
@@ -28,7 +26,7 @@ def main() -> None:
 
     while True:
         input("Pressione Enter para falar...")
-        filepath = record_audio(duration_seconds=settings.voice_record_seconds)
+        filepath = record_until_silence()
 
         print("Transcrevendo...")
         texto = transcribe_audio(filepath)
@@ -38,9 +36,14 @@ def main() -> None:
             print("Não entendi nada, tente de novo.\n")
             continue
 
-        resposta = agent.respond(texto)
-        print(f"{settings.agent_name}: {resposta}\n")
-        speak(resposta)
+        print(f"{settings.agent_name}: ", end="", flush=True)
+        full_text = ""
+        for chunk in agent.respond_stream(texto):
+            print(chunk, end="", flush=True)
+            full_text += chunk
+        print("\n")
+
+        speak(full_text)
 
 
 if __name__ == "__main__":
