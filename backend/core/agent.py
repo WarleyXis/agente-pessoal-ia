@@ -80,8 +80,7 @@ class Agent:
                 result = "Ação não autorizada pelo usuário."
             else:
                 result = tool.execute(**arguments)
-
-                messages.append({"role": "tool", "name": tool_name, "content": result})
+            messages.append({"role": "tool", "name": tool_name, "content": result})
 
         return messages, True
 

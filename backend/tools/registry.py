@@ -5,6 +5,7 @@
 
 from backend.tools.base import Tool
 from backend.tools.browser_tools import OpenUrlTool, SearchWebTool
+from backend.tools.coding_tools import GitInfoTool, ReadFileTool, RunTestsTool
 from backend.tools.computer_tools import ClickAtTool, OpenApplicationTool, TypeTextTool
 from backend.tools.system_tools import GetCurrentTimeTool, ListFilesTool
 from backend.tools.vision_tools import DescribeScreenTool
@@ -51,5 +52,8 @@ def build_default_registry() -> ToolRegistry:
     registry.register(TypeTextTool())
     registry.register(OpenUrlTool())
     registry.register(SearchWebTool())
+    registry.register(ReadFileTool())
+    registry.register(RunTestsTool())
+    registry.register(GitInfoTool())
     
     return registry
