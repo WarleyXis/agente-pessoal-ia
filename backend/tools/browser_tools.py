@@ -73,7 +73,18 @@ class SearchWebTool(Tool):
     def execute(self, query: str = "", **kwargs) -> str:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            # Um navegador automatizado "padrão" costuma se denunciar por
+            # não ter identificação de navegador real nem tamanho de tela
+            # — isso ajuda a evitar ser barrado como robô.
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/128.0.0.0 Safari/537.36"
+                ),
+                viewport={"width": 1280, "height": 800},
+            )
+            page = context.new_page()
             try:
                 page.goto(f"https://html.duckduckgo.com/html/?q={query}", timeout=15000)
                 titulos = page.locator(".result__title").all_inner_texts()[:5]
