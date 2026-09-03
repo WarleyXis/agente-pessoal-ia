@@ -30,6 +30,7 @@ class Tool(ABC):
     name: str
     description: str
     risk_level: RiskLevel
+    domain: str = "general"
 
     @abstractmethod
     def parameters_schema(self) -> dict:

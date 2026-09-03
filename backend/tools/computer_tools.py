@@ -30,6 +30,7 @@ class OpenApplicationTool(Tool):
         "'calculadora', 'paint')."
     )
     risk_level = RiskLevel.HIGH
+    domain = "computer" 
 
     def parameters_schema(self) -> dict:
         return {
@@ -66,6 +67,7 @@ class ClickAtTool(Tool):
         "confirmar as coordenadas exatas."
     )
     risk_level = RiskLevel.HIGH
+    domain = "computer"
 
     def parameters_schema(self) -> dict:
         return {
@@ -93,6 +95,7 @@ class TypeTextTool(Tool):
         "ferramenta é chamada."
     )
     risk_level = RiskLevel.HIGH
+    domain = "computer"
 
     def parameters_schema(self) -> dict:
         return {

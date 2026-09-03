@@ -3,8 +3,9 @@
 # de voz, onde queremos mostrar o texto aparecendo progressivamente.
 
 import json
-from typing import Iterator
 
+from backend.core.tool_router import relevant_domains
+from typing import Iterator
 from backend.core.config import settings
 from backend.core.llm_provider import LLMProvider, get_llm_provider
 from backend.core.security import ask_approval, requires_approval
@@ -96,8 +97,9 @@ class Agent:
     def respond(self, user_message: str) -> str:
         """Resposta completa de uma vez (usada pelo terminal em texto e pela API)."""
         messages = self._build_base_messages(user_message)
+        domains = relevant_domains(user_message)
         initial_message = self.llm_provider.chat(
-            messages, tools=self.tool_registry.schemas_for_llm()
+            messages, tools=self.tool_registry.schemas_for_llm(domains)
         )
         messages, needs_final_call = self._resolve_tool_calls(messages, initial_message)
 
@@ -113,8 +115,9 @@ class Agent:
     def respond_stream(self, user_message: str) -> Iterator[str]:
         """Mesma lógica, mas devolve a resposta final em pedaços (usada pelo modo de voz)."""
         messages = self._build_base_messages(user_message)
+        domains = relevant_domains(user_message)
         initial_message = self.llm_provider.chat(
-            messages, tools=self.tool_registry.schemas_for_llm()
+            messages, tools=self.tool_registry.schemas_for_llm(domains)
         )
         messages, needs_final_call = self._resolve_tool_calls(messages, initial_message)
 

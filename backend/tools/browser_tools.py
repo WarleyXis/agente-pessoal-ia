@@ -23,6 +23,7 @@ class OpenUrlTool(Tool):
         "acessar um site específico."
     )
     risk_level = RiskLevel.MEDIUM
+    domain = "browser"
 
     def parameters_schema(self) -> dict:
         return {
@@ -60,6 +61,7 @@ class SearchWebTool(Tool):
     name = "search_web"
     description = "Pesquisa um termo na web e devolve os principais resultados (título e link)."
     risk_level = RiskLevel.LOW
+    domain = "browser"
 
     def parameters_schema(self) -> dict:
         return {

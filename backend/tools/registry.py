@@ -21,13 +21,17 @@ class ToolRegistry:
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
 
-    def schemas_for_llm(self) -> list[dict]:
+    def schemas_for_llm(self, domains: set[str] | None = None) -> list[dict]:
         """
         Monta a lista de ferramentas no formato que os modelos de IA
-        esperam para 'function calling' — um padrão usado tanto pelo
-        Ollama quanto pela OpenAI, o que facilita trocar de provedor
-        depois.
+        esperam para 'function calling'. Se 'domains' for informado,
+        só inclui ferramentas desses domínios — usado para reduzir
+        quantas ferramentas o modelo vê de uma vez.
         """
+        tools = self._tools.values()
+        if domains is not None:
+            tools = [t for t in tools if t.domain in domains]
+
         return [
             {
                 "type": "function",
@@ -37,7 +41,7 @@ class ToolRegistry:
                     "parameters": tool.parameters_schema(),
                 },
             }
-            for tool in self._tools.values()
+            for tool in tools
         ]
 
 
@@ -55,5 +59,5 @@ def build_default_registry() -> ToolRegistry:
     registry.register(ReadFileTool())
     registry.register(RunTestsTool())
     registry.register(GitInfoTool())
-    
+
     return registry

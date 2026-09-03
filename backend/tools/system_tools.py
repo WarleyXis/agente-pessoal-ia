@@ -13,6 +13,7 @@ class GetCurrentTimeTool(Tool):
     name = "get_current_time"
     description = "Retorna a data e hora atuais do sistema."
     risk_level = RiskLevel.LOW
+    domain = "system"
 
     def parameters_schema(self) -> dict:
         # Essa ferramenta não precisa de nenhum argumento.
@@ -27,6 +28,7 @@ class ListFilesTool(Tool):
     name = "list_files"
     description = "Lista os arquivos de uma pasta específica."
     risk_level = RiskLevel.LOW
+    domain = "system"
 
     def parameters_schema(self) -> dict:
         return {

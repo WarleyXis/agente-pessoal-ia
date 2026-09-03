@@ -24,6 +24,7 @@ class DescribeScreenTool(Tool):
     # (senhas visíveis, conversas privadas, etc) — por isso pede
     # aprovação antes de rodar, mesmo não sendo uma ação destrutiva.
     risk_level = RiskLevel.MEDIUM
+    domain = "vision"
 
     def parameters_schema(self) -> dict:
         return {

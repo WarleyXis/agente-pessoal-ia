@@ -25,7 +25,8 @@ class ReadFileTool(Tool):
         "arquivos dentro de backend."
     )
     risk_level = RiskLevel.LOW
-
+    domain = "coding"
+    
     def parameters_schema(self) -> dict:
         return {
             "type": "object",
@@ -67,7 +68,8 @@ class RunTestsTool(Tool):
     name = "run_tests"
     description = "Executa a suíte de testes automatizados do projeto (pytest) e devolve o resultado."
     risk_level = RiskLevel.MEDIUM
-
+    domain = "coding"
+    
     def parameters_schema(self) -> dict:
         return {"type": "object", "properties": {}, "required": []}
 
@@ -91,7 +93,8 @@ class GitInfoTool(Tool):
         f"permitidos: {', '.join(sorted(ALLOWED_GIT_SUBCOMMANDS))}."
     )
     risk_level = RiskLevel.LOW
-
+    domain = "coding"
+    
     def parameters_schema(self) -> dict:
         return {
             "type": "object",
