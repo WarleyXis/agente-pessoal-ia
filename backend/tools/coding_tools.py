@@ -66,7 +66,12 @@ class ReadFileTool(Tool):
 
 class RunTestsTool(Tool):
     name = "run_tests"
-    description = "Executa a suíte de testes automatizados do projeto (pytest) e devolve o resultado."
+    description = (
+        "Executa a suíte de testes automatizados do projeto (pytest) e "
+        "devolve o resultado. Use SOMENTE quando o usuário pedir "
+        "explicitamente para rodar ou executar os testes. Para ver o "
+        "que está escrito dentro de um arquivo, use read_file."
+    )
     risk_level = RiskLevel.MEDIUM
     domain = "coding"
     

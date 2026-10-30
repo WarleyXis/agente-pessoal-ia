@@ -60,8 +60,6 @@ class Agent:
         if isinstance(arguments, str):
             arguments = json.loads(arguments)
 
-        print(f"🔧 Executando: {tool_name}({arguments})")
-
         tool = self.tool_registry.get(tool_name)
         if tool is None:
             return tool_name, f"Ferramenta desconhecida: {tool_name}"
@@ -69,6 +67,7 @@ class Agent:
         if requires_approval(tool.risk_level) and not ask_approval(tool_name, arguments):
             return tool_name, "Ação não autorizada pelo usuário."
 
+        print(f"🔧 Executando: {tool_name}({arguments})")
         return tool_name, tool.execute(**arguments)
 
     def _run_tool_loop(
