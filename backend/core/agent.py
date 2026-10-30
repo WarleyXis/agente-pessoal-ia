@@ -1,20 +1,27 @@
-# O Agent sabe usar ferramentas e tem memória. A partir desta fase,
-# ganha também uma versão "streaming" da resposta — útil para o modo
-# de voz, onde queremos mostrar o texto aparecendo progressivamente.
+# O Agent sabe usar ferramentas, tem memória, e agora consegue
+# encadear VÁRIAS rodadas de ferramenta numa mesma tarefa (até um
+# limite de segurança) — em vez de só uma decisão por mensagem.
+# Isso é o que permite tarefas como "leia o arquivo X e depois rode
+# os testes", sem precisar de um plano escrito antes.
 
 import json
-
-from backend.core.tool_router import relevant_domains
 from typing import Iterator
+
 from backend.core.config import settings
 from backend.core.llm_provider import LLMProvider, get_llm_provider
 from backend.core.security import ask_approval, requires_approval
+from backend.core.tool_router import relevant_domains
 from backend.memory import store as memory_store
 from backend.tools.registry import ToolRegistry, build_default_registry
 
 
 class Agent:
     """Orquestrador central do agente pessoal."""
+
+    # Quantas rodadas de "pedir ferramenta -> executar -> ver resultado"
+    # o agente pode encadear numa mesma tarefa, antes de ser forçado a
+    # responder de qualquer jeito. Evita loops infinitos.
+    MAX_TOOL_ITERATIONS = 5
 
     def __init__(
         self,
@@ -28,7 +35,6 @@ class Agent:
         self.history: list[dict] = memory_store.load_recent_history()
 
     def _build_base_messages(self, user_message: str) -> list[dict]:
-        """Monta o histórico + mensagem atual, prontos para mandar ao modelo."""
         system_prompt = (
             f"Você é {settings.agent_name}, um assistente pessoal direto "
             f"e prestativo. Responda sempre em português. Use as "
@@ -41,52 +47,59 @@ class Agent:
             f"responda com base nela. Nunca negue ter acesso a uma "
             f"informação depois que uma ferramenta já a forneceu."
         )
-        
         return (
             [{"role": "system", "content": system_prompt}]
             + self.history
             + [{"role": "user", "content": user_message}]
         )
 
-    def _resolve_tool_calls(
-        self, messages: list[dict], initial_message: dict
-    ) -> tuple[list[dict], bool]:
+    def _execute_tool_call(self, call: dict) -> tuple[str, str]:
+        """Executa uma única chamada de ferramenta e devolve (nome, resultado)."""
+        tool_name = call["function"]["name"]
+        arguments = call["function"]["arguments"]
+        if isinstance(arguments, str):
+            arguments = json.loads(arguments)
+
+        print(f"🔧 Executando: {tool_name}({arguments})")
+
+        tool = self.tool_registry.get(tool_name)
+        if tool is None:
+            return tool_name, f"Ferramenta desconhecida: {tool_name}"
+
+        if requires_approval(tool.risk_level) and not ask_approval(tool_name, arguments):
+            return tool_name, "Ação não autorizada pelo usuário."
+
+        return tool_name, tool.execute(**arguments)
+
+    def _run_tool_loop(
+        self, messages: list[dict], domains: set[str] | None
+    ) -> tuple[list[dict], dict | None]:
         """
-        Recebe a primeira resposta do modelo. Se ela pedir ferramentas,
-        executa cada uma (respeitando aprovação de risco) e adiciona
-        os resultados ao histórico de mensagens.
-
-        Devolve as mensagens atualizadas e um booleano indicando se
-        ainda é necessária uma chamada final ao modelo (True quando
-        ferramentas foram usadas).
+        Executa rodadas de decisão de ferramenta enquanto o modelo
+        continuar pedindo — até ele parar de pedir (retorno normal)
+        ou até MAX_TOOL_ITERATIONS (retorno None, sinalizando que
+        ainda falta uma chamada final para gerar a resposta).
         """
-        tool_calls = initial_message.get("tool_calls")
-        if not tool_calls:
-            return messages, False
+        tools_schema = self.tool_registry.schemas_for_llm(domains)
 
-        messages.append(initial_message)
+        for _ in range(self.MAX_TOOL_ITERATIONS):
+            message = self.llm_provider.chat(messages, tools=tools_schema)
+            tool_calls = message.get("tool_calls")
 
-        for call in tool_calls:
-            tool_name = call["function"]["name"]
-            arguments = call["function"]["arguments"]
-            if isinstance(arguments, str):
-                arguments = json.loads(arguments)
+            if not tool_calls:
+                return messages, message
 
-            tool = self.tool_registry.get(tool_name)
-            if tool is None:
-                result = f"Ferramenta desconhecida: {tool_name}"
-            elif requires_approval(tool.risk_level) and not ask_approval(
-                tool_name, arguments
-            ):
-                result = "Ação não autorizada pelo usuário."
-            else:
-                result = tool.execute(**arguments)
-            messages.append({"role": "tool", "name": tool_name, "content": result})
-
-        return messages, True
+            messages.append(message)
+            for call in tool_calls:
+                tool_name, result = self._execute_tool_call(call)
+                messages.append({"role": "tool", "name": tool_name, "content": result})
+        else:
+            # Excedeu o limite de segurança sem o modelo se dar por
+            # satisfeito — quem chamou este método precisa fazer uma
+            # última chamada, sem ferramentas, para forçar uma resposta.
+            return messages, None
 
     def _save_turn(self, user_message: str, final_text: str) -> None:
-        """Salva a troca (pergunta + resposta) na memória de curto e longo prazo."""
         self.history.append({"role": "user", "content": user_message})
         self.history.append({"role": "assistant", "content": final_text})
         self.history = self.history[-memory_store.MAX_HISTORY_MESSAGES:]
@@ -98,16 +111,13 @@ class Agent:
         """Resposta completa de uma vez (usada pelo terminal em texto e pela API)."""
         messages = self._build_base_messages(user_message)
         domains = relevant_domains(user_message)
-        initial_message = self.llm_provider.chat(
-            messages, tools=self.tool_registry.schemas_for_llm(domains)
-        )
-        messages, needs_final_call = self._resolve_tool_calls(messages, initial_message)
+        messages, last_message = self._run_tool_loop(messages, domains)
 
-        if needs_final_call:
+        if last_message is not None:
+            final_text = last_message.get("content", "")
+        else:
             final_message = self.llm_provider.chat(messages)
             final_text = final_message.get("content", "")
-        else:
-            final_text = initial_message.get("content", "")
 
         self._save_turn(user_message, final_text)
         return final_text
@@ -116,18 +126,15 @@ class Agent:
         """Mesma lógica, mas devolve a resposta final em pedaços (usada pelo modo de voz)."""
         messages = self._build_base_messages(user_message)
         domains = relevant_domains(user_message)
-        initial_message = self.llm_provider.chat(
-            messages, tools=self.tool_registry.schemas_for_llm(domains)
-        )
-        messages, needs_final_call = self._resolve_tool_calls(messages, initial_message)
+        messages, last_message = self._run_tool_loop(messages, domains)
 
         full_text = ""
-        if needs_final_call:
+        if last_message is not None:
+            full_text = last_message.get("content", "")
+            yield full_text
+        else:
             for chunk in self.llm_provider.chat_stream(messages):
                 full_text += chunk
                 yield chunk
-        else:
-            full_text = initial_message.get("content", "")
-            yield full_text
 
         self._save_turn(user_message, full_text)
