@@ -7,6 +7,8 @@
 
 from pathlib import Path
 
+from backend.core.config import settings
+
 import numpy as np
 import sounddevice as sd
 import wave
@@ -31,7 +33,7 @@ def _rms(frame: np.ndarray) -> float:
     return float(np.sqrt(np.mean(frame.astype(np.float64) ** 2)) / 32768)
 
 
-def record_until_silence() -> str:
+def record_until_silence() -> str | None:
     """
     Grava do microfone até detectar silêncio contínuo (ou até o
     limite máximo de segurança) e devolve o caminho do arquivo salvo.
@@ -60,6 +62,8 @@ def record_until_silence() -> str:
                 silent_ms += FRAME_MS
                 if silent_ms >= SILENCE_LIMIT_MS:
                     break
+            elif total_ms >= settings.voice_record_seconds * 1000:
+                return None
 
     print("Gravação concluída.")
 

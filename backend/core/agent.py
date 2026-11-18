@@ -1,8 +1,8 @@
+import json
 import logging
 from dataclasses import dataclass
 from typing import Generator, Iterator
 
-import json
 from jsonschema import Draft202012Validator
 
 from backend.core.config import settings
@@ -60,9 +60,13 @@ class Agent:
             messages.append(message)
             denied = False
             for call in calls:
-                name, result, refused = yield from self._execute(call, available)
+                if denied:
+                    function = call.get("function", {}) if isinstance(call, dict) else {}
+                    name = function.get("name", "desconhecida") if isinstance(function, dict) else "desconhecida"
+                    result = "Ação não iniciada após uma recusa."
+                else:
+                    name, result, denied = yield from self._execute(call, available)
                 messages.append({"role": "tool", "tool_name": name, "content": result})
-                denied = denied or refused
             remaining -= len(calls)
             if denied or remaining == 0:
                 break

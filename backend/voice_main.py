@@ -27,6 +27,9 @@ def main() -> None:
     while True:
         input("Pressione Enter para falar...")
         filepath = record_until_silence()
+        if filepath is None:
+            print("Nenhuma fala detectada.")
+            continue
 
         print("Transcrevendo...")
         texto = transcribe_audio(filepath)

@@ -3,6 +3,7 @@
 # provedor de IA usar) é lida aqui, a partir do arquivo .env —
 # nunca digitada direto nos outros arquivos do código.
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,7 +35,7 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3.2"
     ollama_base_url: str = "http://localhost:11434"
     ollama_vision_model: str = "moondream"
-    voice_record_seconds: int = 5
+    voice_record_seconds: int = Field(default=5, ge=1, le=30)
     frontend_origin: str = "http://localhost:5173"
     projects_file: str = "data/projects.json"
 

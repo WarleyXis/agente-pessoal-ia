@@ -11,6 +11,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from backend.api.approvals import Approvals
 from backend.api.reports import init_reports, router as reports_router
+from backend.api.media import router as media_router
 from backend.core.agent import Agent
 from backend.core.config import settings
 
@@ -77,6 +78,7 @@ def decide(key: str, decision: Decision, request: Request) -> dict:
 
 
 app.include_router(reports_router)
+app.include_router(media_router)
 
 dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if dist.is_dir():

@@ -23,5 +23,5 @@ def _get_model() -> WhisperModel:
 def transcribe_audio(filepath: str) -> str:
     """Transcreve um arquivo de áudio para texto em português."""
     model = _get_model()
-    segments, _ = model.transcribe(filepath, language="pt")
+    segments, _ = model.transcribe(filepath, language="pt", vad_filter=True)
     return " ".join(segment.text for segment in segments).strip()

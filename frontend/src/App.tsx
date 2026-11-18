@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, getStatus, sendMessage, type ChatResult, type Report } from './api';
 import { Reports } from './Reports';
+import { Microphone } from './Microphone';
+import { captureWindow, speakLocally, uploadMedia } from './media';
 import './App.css';
 
 interface Message {
@@ -16,6 +18,8 @@ function App() {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [listening, setListening] = useState(false);
+  const [speak, setSpeak] = useState(false);
   const [approval, setApproval] = useState<Extract<ChatResult, { approval: unknown }>['approval'] | null>(null);
   const [projects, setProjects] = useState<string[]>([]);
   const [project, setProject] = useState('');
@@ -59,6 +63,7 @@ function App() {
       setApproval(result.approval);
     } else {
       setMessages((previous) => [...previous, { role: 'assistant', content: result.response }]);
+      if (speak && !speakLocally(result.response)) setError('Nenhuma voz local em português do Brasil está disponível no navegador.');
     }
   }
 
@@ -71,7 +76,7 @@ function App() {
   function submit(event: FormEvent) {
     event.preventDefault();
     const message = input.trim();
-    if (!message || busy || approval) return;
+    if (!message || busy || approval || listening) return;
     setMessages((previous) => [...previous, { role: 'user', content: message }]);
     setInput('');
     const lower = message.toLocaleLowerCase('pt-BR');
@@ -90,7 +95,7 @@ function App() {
   return <main className="dashboard">
     <header className="dashboard-header">
       <div><h1>{name}</h1><p>Assistente pessoal local</p></div>
-      <p className="status" role="status"><span />{busy || (approval ? 'Aguardando sua decisão' : online ? 'Painel conectado' : 'Sem conexão')}{model && <small>{model}</small>}</p>
+      <p className="status" role="status"><span />{(listening ? 'Ouvindo' : busy) || (approval ? 'Aguardando sua decisão' : online ? 'Painel conectado' : 'Sem conexão')}{model && <small>{model}</small>}</p>
     </header>
     {error && <p className="error" role="alert">{error}</p>}
     <div className="layout">
@@ -116,8 +121,30 @@ function App() {
         </section>}
         <form className="composer" onSubmit={submit}>
           <input aria-label="Pedido ao Atlas" placeholder="Digite seu pedido" value={input} onChange={(event) => setInput(event.target.value)} />
-          <button disabled={!input.trim() || !!busy || !!approval}>Enviar</button>
+          <button disabled={!input.trim() || !!busy || !!approval || listening}>Enviar</button>
         </form>
+        <div className="actions media">
+          <Microphone disabled={!!busy || !!approval} onError={setError} onState={setListening} onAudio={(blob) => {
+            void action('Transcrevendo', async () => {
+              setInput((await uploadMedia<{ text: string }>('/transcribe', blob)).text);
+            });
+          }} />
+          <button disabled={!!busy || !!approval || listening} onClick={() => {
+            const question = input.trim() || 'Descreva o que está visível nesta janela.';
+            void action('Lendo janela', async () => {
+              const image = await captureWindow();
+              const result = await uploadMedia<{ response: string }>(`/vision?question=${encodeURIComponent(question)}`, image);
+              setMessages((previous) => [...previous, { role: 'user', content: question }]);
+              setInput('');
+              show(result);
+            });
+          }}>Ler janela ou aba</button>
+          <label className="checkbox"><input type="checkbox" checked={speak} onChange={(event) => {
+            setSpeak(event.target.checked);
+            if (!event.target.checked) window.speechSynthesis?.cancel();
+          }} /> Ler respostas</label>
+          {speak && <button onClick={() => window.speechSynthesis?.cancel()}>Parar voz</button>}
+        </div>
       </section>
       <section className="card" aria-label="Projetos">
         <h2>Projetos</h2>

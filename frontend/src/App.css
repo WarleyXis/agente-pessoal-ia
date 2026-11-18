@@ -27,3 +27,4 @@ pre { overflow: auto; max-height: 17rem; white-space: pre-wrap; overflow-wrap: a
 .path { overflow-wrap: anywhere; }
 .error { border-left: 3px solid #ff9a91; background: #351d2a; padding: .75rem; }
 @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+.media { margin-top: .75rem; align-items: center; }
