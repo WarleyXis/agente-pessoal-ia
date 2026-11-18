@@ -43,12 +43,13 @@ class LLMProvider(ABC):
 class OllamaProvider(LLMProvider):
     """Provedor que conversa com um modelo rodando localmente via Ollama."""
 
-    def __init__(self, model: str, base_url: str) -> None:
+    def __init__(self, model: str, base_url: str, keep_alive: str = "10m") -> None:
         self.model = model
         self.base_url = base_url
+        self.keep_alive = keep_alive
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> dict:
-        payload = {"model": self.model, "messages": messages, "stream": False}
+        payload = {"model": self.model, "messages": messages, "stream": False, "keep_alive": self.keep_alive}
         if tools:
             payload["tools"] = tools
         if self.model.split(":", 1)[0] == "qwen3":
@@ -69,7 +70,7 @@ class OllamaProvider(LLMProvider):
         return message
 
     def chat_stream(self, messages: list[dict]) -> Iterator[str]:
-        payload = {"model": self.model, "messages": messages, "stream": True}
+        payload = {"model": self.model, "messages": messages, "stream": True, "keep_alive": self.keep_alive}
         if self.model.split(":", 1)[0] == "qwen3":
             payload["think"] = False
 
@@ -94,6 +95,7 @@ def get_llm_provider() -> LLMProvider:
         return OllamaProvider(
             model=settings.ollama_model,
             base_url=settings.ollama_base_url,
+            keep_alive=settings.ollama_keep_alive,
         )
 
     raise ValueError(f"Provedor de LLM desconhecido: {settings.llm_provider}")

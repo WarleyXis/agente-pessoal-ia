@@ -100,3 +100,5 @@ pre { overflow: auto; max-height: 11rem; white-space: pre-wrap; overflow-wrap: a
   .layout, .personal-actions { grid-template-columns: 1fr; }
   .connection small { display: none; }
 }
+
+.voice-guide .voice-times { margin: .65rem 0 0; font-variant-numeric: tabular-nums; }

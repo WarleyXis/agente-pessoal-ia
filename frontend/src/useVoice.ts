@@ -7,6 +7,7 @@ export function useVoice(onError: (message: string) => void) {
   const session = useRef<AbortController | null>(null);
   const source = useRef<AudioBufferSourceNode | null>(null);
   const [speaking, setSpeaking] = useState(false);
+  const [preparing, setPreparing] = useState(false);
 
   const stop = useCallback(() => {
     session.current?.abort();
@@ -15,6 +16,7 @@ export function useVoice(onError: (message: string) => void) {
     source.current = null;
     level.current = 0;
     setSpeaking(false);
+    setPreparing(false);
   }, []);
 
   useEffect(() => () => {
@@ -28,18 +30,20 @@ export function useVoice(onError: (message: string) => void) {
     return context.current;
   }
 
-  async function play(text: string) {
+  async function play(text: string, onStarted?: (elapsed: number) => void) {
     stop();
     if (!text.trim()) return;
+    const started = performance.now();
     const run = new AbortController();
     session.current = run;
-    setSpeaking(true);
+    setPreparing(true);
     const finish = () => {
       if (session.current === run) {
         source.current = null;
         session.current = null;
         level.current = 0;
         setSpeaking(false);
+        setPreparing(false);
       }
     };
     try {
@@ -68,6 +72,9 @@ export function useVoice(onError: (message: string) => void) {
       };
       player.start();
       source.current = player;
+      setPreparing(false);
+      setSpeaking(true);
+      onStarted?.(performance.now() - started);
       sample();
     } catch (error) {
       if (run.signal.aborted) return;
@@ -78,5 +85,5 @@ export function useVoice(onError: (message: string) => void) {
 
   function setLevel(value: number) { level.current = value; }
 
-  return { level, setLevel, speaking, prepare, play, stop };
+  return { level, setLevel, speaking, preparing, prepare, play, stop };
 }

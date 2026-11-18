@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     llm_provider: str = "ollama"
     ollama_model: str = "llama3.2"
     ollama_base_url: str = "http://localhost:11434"
+    ollama_keep_alive: str = "10m"
     ollama_vision_model: str = "moondream"
     piper_voice: str = "data/voices/pt_BR-faber-medium.onnx"
     voice_record_seconds: int = Field(default=5, ge=1, le=30)

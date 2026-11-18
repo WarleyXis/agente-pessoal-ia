@@ -100,7 +100,7 @@ export function Microphone({ disabled, audioContext, onAudio, onError, onState, 
             voiceFrames = level >= 0.018 ? voiceFrames + 1 : 0;
             if (voiceFrames >= 3) lastVoice = now;
 
-            if (lastVoice && now - lastVoice > 1100) {
+            if (lastVoice && now - lastVoice > 850) {
               recorder.stop();
               return;
             }

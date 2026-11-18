@@ -45,6 +45,7 @@ async def local_origin(request: Request, call_next):
 
 class ChatRequest(BaseModel):
     message: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=12000)]
+    spoken: StrictBool = False
 
 
 class PersonalAction(BaseModel):
@@ -99,7 +100,7 @@ def get_status() -> dict:
 
 @app.post("/api/chat")
 def post_chat(body: ChatRequest, request: Request) -> dict:
-    execution = request.app.state.agent.run(body.message)
+    execution = request.app.state.agent.run(body.message, spoken=body.spoken)
     return run_model(lambda: request.app.state.approvals.advance(execution, lambda: next(execution)))
 
 

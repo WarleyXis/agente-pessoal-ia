@@ -34,6 +34,7 @@ function App() {
   const [error, setError] = useState('');
   const voice = useVoice(setError);
   const spokenApproval = useRef(false);
+  const [voiceTimes, setVoiceTimes] = useState<{ recognition: number; reply?: number; playback?: number } | null>(null);
   const [listening, setListening] = useState(false);
   const [speak, setSpeak] = useState(false);
   const [approval, setApproval] = useState<Extract<ChatResult, { approval: unknown }>['approval'] | null>(null);
@@ -78,14 +79,14 @@ function App() {
     }
   }
 
-  function show(result: ChatResult, spoken = speak) {
+  function show(result: ChatResult, spoken = speak, reportPlayback?: (elapsed: number) => void) {
     if ('approval' in result) {
       setApproval(result.approval);
       spokenApproval.current = spoken;
-      if (spoken) void voice.play('Preciso da sua autorização. Confira a ação no painel.');
+      if (spoken) void voice.play('Preciso da sua autorização. Confira a ação no painel.', reportPlayback);
     } else {
       setMessages((previous) => [...previous, { role: 'assistant', content: result.response }]);
-      if (spoken) void voice.play(result.response);
+      if (spoken) void voice.play(result.response, reportPlayback);
     }
   }
 
@@ -95,7 +96,17 @@ function App() {
     return report;
   }
 
-  async function sendPrompt(message: string, spoken: boolean) {
+  async function sendPrompt(message: string, spoken: boolean, recognition?: number) {
+    const started = performance.now();
+    function deliver(result: ChatResult) {
+      const reply = performance.now() - started;
+      if (recognition !== undefined) {
+        setVoiceTimes({ recognition, reply });
+        show(result, spoken, (playback) => setVoiceTimes({ recognition, reply, playback }));
+      } else {
+        show(result, spoken);
+      }
+    }
     setMessages((previous) => [...previous, { role: 'user', content: message }]);
     setInput('');
     const lower = message.toLocaleLowerCase('pt-BR');
@@ -104,10 +115,10 @@ function App() {
     setBusy(target ? 'Consultando projeto' : 'Processando pedido');
     if (target) {
       await createReview(target, /teste|pytest/.test(lower));
-      show({ response: `Relatório de ${target} disponível no painel de projetos.` }, spoken);
+      deliver({ response: `Relatório de ${target} disponível no painel de projetos.` });
       return;
     }
-    show(await sendMessage(message), spoken);
+    deliver(await sendMessage(message, spoken));
   }
 
   function submit(event: FormEvent) {
@@ -119,9 +130,9 @@ function App() {
   }
 
   const voiceState = listening ? 'listening' : approval ? 'approval' :
-    busy ? 'thinking' : voice.speaking ? 'speaking' : 'idle';
+    busy || voice.preparing ? 'thinking' : voice.speaking ? 'speaking' : 'idle';
   const voiceStatus = listening ? 'Ouvindo você' : approval ? 'Aguardando sua aprovação' :
-    busy || (voice.speaking ? 'Atlas falando' : 'Pronto para conversar');
+    busy || (voice.preparing ? 'Preparando áudio' : voice.speaking ? 'Atlas falando' : 'Pronto para conversar');
 
   return <main className="dashboard">
     <header className="dashboard-header">
@@ -140,12 +151,21 @@ function App() {
               audioContext={() => { voice.stop(); return voice.prepare(); }}
               onLevel={voice.setLevel} onState={setListening} onAudio={(blob) => {
                 void action('Transcrevendo sua fala', async () => {
+                  setVoiceTimes(null);
+                  const started = performance.now();
                   const { text } = await uploadMedia<{ text: string }>('/transcribe', blob);
-                  await sendPrompt(text, true);
+                  const recognition = performance.now() - started;
+                  setVoiceTimes({ recognition });
+                  await sendPrompt(text, true, recognition);
                 });
               }} />
-            {voice.speaking && <button type="button" onClick={voice.stop}>Parar voz</button>}
+            {(voice.speaking || voice.preparing) && <button type="button" onClick={voice.stop}>Parar voz</button>}
           </div>
+          {voiceTimes && <p className="voice-times">
+            Transcrição {(voiceTimes.recognition / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s
+            {voiceTimes.reply !== undefined && ` · Resposta ${(voiceTimes.reply / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s`}
+            {voiceTimes.playback !== undefined && ` · Áudio ${(voiceTimes.playback / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s`}
+          </p>}
         </div>
       </section>
       <section className="card chat" aria-label="Conversa">

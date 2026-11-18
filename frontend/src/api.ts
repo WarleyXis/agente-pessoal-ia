@@ -16,8 +16,8 @@ export type ChatResult =
   | { response: string }
   | { approval: { id: string; tool: string; arguments: Record<string, unknown> } };
 
-export function sendMessage(message: string) {
-  return api<ChatResult>('/chat', { message });
+export function sendMessage(message: string, spoken = false) {
+  return api<ChatResult>('/chat', { message, spoken });
 }
 
 export function getStatus() {

@@ -91,3 +91,25 @@ def test_chat_does_not_mislabel_atlas_failure_as_missing_model(tmp_path, monkeyp
         response = client.post("/api/chat", json={"message": "Oi"})
     assert response.status_code == 500
     assert response.json()["detail"] == "Erro interno no Atlas (TypeError)."
+
+
+def test_spoken_chat_requests_shorter_answers_and_uses_recent_context(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "DB_PATH", tmp_path / "atlas.db")
+    with TestClient(app) as client:
+        for number in range(6):
+            store.save_turn(f"Pergunta {number}", f"Resposta {number}")
+        model = Mock()
+        model.chat.return_value = {"content": "Tudo pronto."}
+        app.state.agent.llm_provider = model
+
+        result = client.post("/api/chat", json={"message": "Oi", "spoken": True})
+        assert result.json() == {"response": "Tudo pronto."}
+        messages = model.chat.call_args.args[0]
+        assert "uma ou duas frases curtas" in messages[0]["content"]
+        assert len(messages) == 10
+        assert messages[1]["content"] == "Pergunta 2"
+
+        client.post("/api/chat", json={"message": "Oi novamente"})
+        messages = model.chat.call_args.args[0]
+        assert "uma ou duas frases curtas" not in messages[0]["content"]
+        assert messages[1]["content"] == "Pergunta 0"
