@@ -4,7 +4,7 @@
 // consegue conversar com o agente através da API.
 
 import { useEffect, useState } from "react";
-import { getStatus, sendMessage } from "./api";
+import { api, getStatus, sendMessage, type ChatResult } from "./api";
 
 interface Message {
   role: "user" | "assistant";
@@ -16,6 +16,26 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [approval, setApproval] = useState<Extract<ChatResult, { approval: unknown }>["approval"] | null>(null);
+
+  function showResult(result: ChatResult) {
+    if ("approval" in result) setApproval(result.approval);
+    else setMessages((prev) => [...prev, { role: "assistant", content: result.response }]);
+  }
+
+  async function decide(approved: boolean) {
+    if (!approval || loading) return;
+    const { id } = approval;
+    setApproval(null);
+    setLoading(true);
+    try {
+      showResult(await api<ChatResult>(`/approvals/${id}`, { approved }));
+    } catch (error) {
+      setMessages((prev) => [...prev, { role: "assistant", content: String(error) }]);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     // Busca o nome do agente configurado no .env assim que a página
@@ -28,7 +48,7 @@ function App() {
 
   async function handleSend() {
     const texto = input.trim();
-    if (!texto || loading) return;
+    if (!texto || loading || approval) return;
 
     // Mostra a mensagem do usuário na tela imediatamente, sem
     // esperar a resposta do agente — deixa a interface mais ágil.
@@ -37,12 +57,11 @@ function App() {
     setLoading(true);
 
     try {
-      const resposta = await sendMessage(texto);
-      setMessages((prev) => [...prev, { role: "assistant", content: resposta }]);
-    } catch {
+      showResult(await sendMessage(texto));
+    } catch (error) {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Erro ao falar com o agente. O backend está rodando?" },
+        { role: "assistant", content: error instanceof Error ? error.message : "Erro ao falar com o Atlas." },
       ]);
     } finally {
       setLoading(false);
@@ -63,6 +82,12 @@ function App() {
           </p>
         ))}
         {loading && <p><em>Pensando...</em></p>}
+        {approval && <section>
+          <p>Aprovar {approval.tool}?</p>
+          <pre>{JSON.stringify(approval.arguments, null, 2)}</pre>
+          <button onClick={() => decide(true)}>Aprovar</button>
+          <button onClick={() => decide(false)}>Recusar</button>
+        </section>}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <input
@@ -72,7 +97,7 @@ function App() {
           onKeyDown={handleKeyDown}
           placeholder="Digite sua mensagem..."
         />
-        <button onClick={handleSend} disabled={loading}>Enviar</button>
+        <button onClick={handleSend} disabled={loading || !!approval}>Enviar</button>
       </div>
     </div>
   );

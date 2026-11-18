@@ -9,6 +9,7 @@ numpy>=1.26
 faster-whisper>=1.0
 pyttsx3>=2.90
 Pillow>=10.0
-pyautogui>=0.9.54
-pygetwindow>=0.0.9
+pyautogui>=0.9.54; sys_platform == "win32"
+pygetwindow>=0.0.9; sys_platform == "win32"
 playwright>=1.47
+jsonschema>=4.20

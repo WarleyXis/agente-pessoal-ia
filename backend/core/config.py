@@ -35,5 +35,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_vision_model: str = "moondream"
     voice_record_seconds: int = 5
+    frontend_origin: str = "http://localhost:5173"
+    projects_file: str = "data/projects.json"
 
 settings = Settings()

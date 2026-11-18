@@ -1,24 +1,25 @@
-// Este arquivo centraliza a comunicação com o backend — se o
-// endereço da API mudar no futuro, só precisamos editar aqui.
-
-const API_BASE_URL = "http://localhost:8000";
-
-export async function sendMessage(message: string): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+export async function api<T>(path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`/api${path}`, body === undefined ? undefined : {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
-
   if (!response.ok) {
-    throw new Error(`Erro na API: ${response.status}`);
+    const payload = await response.json().catch(() => null);
+    const detail: unknown = payload?.detail;
+    throw new Error(typeof detail === 'string' ? detail : 'O Atlas não conseguiu concluir a solicitação.');
   }
-
-  const data = await response.json();
-  return data.response;
+  return response.json();
 }
 
-export async function getStatus(): Promise<{ agent_name: string; status: string }> {
-  const response = await fetch(`${API_BASE_URL}/api/status`);
-  return response.json();
+export type ChatResult =
+  | { response: string }
+  | { approval: { id: string; tool: string; arguments: Record<string, unknown> } };
+
+export function sendMessage(message: string) {
+  return api<ChatResult>('/chat', { message });
+}
+
+export function getStatus() {
+  return api<{ agent_name: string; status: string; model: string }>('/status');
 }

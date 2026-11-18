@@ -8,8 +8,7 @@
 
 import subprocess
 import time
-import pygetwindow
-import pyautogui
+import sys
 
 from backend.tools.base import RiskLevel, Tool
 
@@ -54,6 +53,9 @@ class OpenApplicationTool(Tool):
             permitidos = ", ".join(sorted(ALLOWED_APPS.keys()))
             return f"Aplicativo não permitido: '{app_name}'. Aplicativos permitidos: {permitidos}."
 
+        if sys.platform != "win32":
+            return "A abertura de aplicativos está disponível no Windows."
+
         subprocess.Popen([executable])
         time.sleep(1.5)  # dá tempo do aplicativo abrir antes da próxima ação
         return f"Aplicativo '{app_name}' aberto com sucesso."
@@ -80,6 +82,10 @@ class ClickAtTool(Tool):
         }
 
     def execute(self, x: int = 0, y: int = 0, **kwargs) -> str:
+        if sys.platform != "win32":
+            return "O controle de desktop está disponível no Windows."
+        import pyautogui
+
         pyautogui.click(x, y)
         return f"Clique executado em ({x}, {y})."
 
@@ -111,6 +117,11 @@ class TypeTextTool(Tool):
         }
 
     def execute(self, text: str = "", window_title: str = "", **kwargs) -> str:
+        if sys.platform != "win32":
+            return "O controle de desktop está disponível no Windows."
+        import pyautogui
+        import pygetwindow
+
         if window_title:
             janelas = pygetwindow.getWindowsWithTitle(window_title)
             if not janelas:

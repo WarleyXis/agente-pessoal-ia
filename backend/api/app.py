@@ -1,60 +1,79 @@
-# Este arquivo cria a API HTTP do agente usando FastAPI. É através
-# dela que o frontend (React) e outras interfaces conversam com o
-# agente — em vez de só o terminal.
-
 from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Annotated, Callable
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+import requests
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, StrictBool, StringConstraints
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from backend.api.approvals import Approvals
 from backend.core.agent import Agent
 from backend.core.config import settings
-
-# Guardamos UMA instância do agente, criada uma única vez quando a
-# API sobe — não uma nova a cada requisição.
-agent: Agent | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global agent
-    agent = Agent()
-    yield
-    agent = None
+    app.state.agent = Agent()
+    app.state.approvals = Approvals()
+    try:
+        yield
+    finally:
+        app.state.approvals.close()
 
 
 app = FastAPI(title=f"{settings.agent_name} API", lifespan=lifespan)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", "testserver"])
 
-# CORS: autoriza o frontend (rodando em localhost:5173 durante o
-# desenvolvimento) a fazer requisições para esta API. Em produção
-# (Fase 20), essa lista seria restrita ao endereço real do app.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+@app.middleware("http")
+async def local_origin(request: Request, call_next):
+    origin = request.headers.get("origin")
+    if origin and origin not in {settings.frontend_origin, str(request.base_url).rstrip("/")}:
+        return JSONResponse({"detail": "Origem não autorizada."}, status_code=403)
+    return await call_next(request)
 
 
 class ChatRequest(BaseModel):
-    """Formato esperado no corpo da requisição de POST /api/chat."""
-    message: str
+    message: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=12000)]
 
 
-class ChatResponse(BaseModel):
-    """Formato da resposta devolvida por POST /api/chat."""
-    response: str
+class Decision(BaseModel):
+    approved: StrictBool
+
+
+def run_model(operation: Callable):
+    try:
+        return operation()
+    except requests.Timeout as error:
+        raise HTTPException(504, "O modelo local demorou demais para responder.") from error
+    except (requests.RequestException, ValueError, KeyError, TypeError, AttributeError) as error:
+        raise HTTPException(502, "Confira se o Ollama está rodando e se o modelo configurado foi instalado.") from error
+    except OverflowError as error:
+        raise HTTPException(429, str(error)) from error
 
 
 @app.get("/api/status")
 def get_status() -> dict:
-    """Endpoint simples para confirmar que a API está no ar."""
-    return {"agent_name": settings.agent_name, "status": "online"}
+    return {"agent_name": settings.agent_name, "status": "online", "model": settings.ollama_model}
 
 
-@app.post("/api/chat", response_model=ChatResponse)
-def post_chat(request: ChatRequest) -> ChatResponse:
-    """Recebe uma mensagem do usuário e devolve a resposta do agente."""
-    resposta = agent.respond(request.message)
-    return ChatResponse(response=resposta)
+@app.post("/api/chat")
+def post_chat(body: ChatRequest, request: Request) -> dict:
+    execution = request.app.state.agent.run(body.message)
+    return run_model(lambda: request.app.state.approvals.advance(execution, lambda: next(execution)))
+
+
+@app.post("/api/approvals/{key}")
+def decide(key: str, decision: Decision, request: Request) -> dict:
+    execution = request.app.state.approvals.take(key)
+    if execution is None:
+        raise HTTPException(404, "A aprovação expirou ou já foi processada.")
+    return run_model(lambda: request.app.state.approvals.advance(execution, lambda: execution.send(decision.approved)))
+
+
+dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+if dist.is_dir():
+    app.mount("/", StaticFiles(directory=dist, html=True), name="frontend")

@@ -64,3 +64,13 @@ def load_recent_history(limit: int = MAX_HISTORY_MESSAGES) -> list[dict]:
     # invertemos para a ordem cronológica certa antes de devolver.
     rows.reverse()
     return [{"role": role, "content": content} for role, content in rows]
+
+
+def save_turn(user_message: str, response: str) -> None:
+    from contextlib import closing
+
+    with closing(_get_connection()) as conn, conn:
+        conn.executemany(
+            "INSERT INTO messages (role, content) VALUES (?, ?)",
+            [("user", user_message), ("assistant", response)],
+        )
