@@ -47,6 +47,8 @@ class OllamaProvider(LLMProvider):
         payload = {"model": self.model, "messages": messages, "stream": False}
         if tools:
             payload["tools"] = tools
+        if self.model.split(":", 1)[0] == "qwen3":
+            payload["think"] = False
 
         response = requests.post(
             f"{self.base_url}/api/chat", json=payload, timeout=120
@@ -56,6 +58,8 @@ class OllamaProvider(LLMProvider):
 
     def chat_stream(self, messages: list[dict]) -> Iterator[str]:
         payload = {"model": self.model, "messages": messages, "stream": True}
+        if self.model.split(":", 1)[0] == "qwen3":
+            payload["think"] = False
 
         with requests.post(
             f"{self.base_url}/api/chat", json=payload, stream=True, timeout=120

@@ -21,6 +21,9 @@ export async function spokenAudio(text: string, signal: AbortSignal) {
     body: JSON.stringify({ text }),
     signal,
   });
-  if (!response.ok) throw new Error('A voz do Windows está indisponível.');
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(typeof payload?.detail === 'string' ? payload.detail : 'A voz local está indisponível.');
+  }
   return response.arrayBuffer();
 }

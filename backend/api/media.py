@@ -1,4 +1,4 @@
-import subprocess
+import logging
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,9 +12,10 @@ from starlette.concurrency import run_in_threadpool
 
 from backend.memory.store import save_turn
 from backend.tools.vision_tools import describe_image
-from backend.voice.windows_audio import synthesize_wav
+from backend.voice.tts import synthesize_wav
 
 router = APIRouter(prefix="/api")
+logger = logging.getLogger(__name__)
 MAX_MEDIA_BYTES = 5 * 1024 * 1024
 
 
@@ -86,6 +87,9 @@ class SpeechRequest(BaseModel):
 def speak(request: SpeechRequest) -> Response:
     try:
         audio = synthesize_wav(request.text)
-    except (OSError, RuntimeError, subprocess.SubprocessError) as error:
-        raise HTTPException(503, "Confira se há uma voz em português do Brasil instalada no Windows.") from error
+    except (FileNotFoundError, ImportError) as error:
+        raise HTTPException(503, "Instale a voz local com InstalarAtlasDesktop.cmd e reinicie o Atlas.") from error
+    except Exception as error:
+        logger.exception("Falha na síntese Piper")
+        raise HTTPException(502, "O Atlas não conseguiu gerar a resposta em áudio.") from error
     return Response(audio, media_type="audio/wav", headers={"Cache-Control": "no-store"})

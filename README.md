@@ -10,7 +10,7 @@ Use Git, Python 3.12, Node.js 24 e Ollama. Abra o PowerShell na raiz do reposit�
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
-ollama pull qwen2.5:3b
+ollama pull qwen3:4b
 ollama pull moondream
 npm --prefix frontend ci
 npm --prefix frontend run build
@@ -20,6 +20,14 @@ npm --prefix frontend run build
 Abra [Atlas local](http://localhost:8000). Mude `AGENT_NAME` no `.env` para personalizar o nome. Use `ollama list` para verificar os modelos instalados e [o estado da API](http://localhost:8000/api/status) para verificar o nome e o modelo configurado. O estado da API indica que o backend iniciou. O primeiro pedido ao chat testa a conexão com o modelo.
 
 Para desenvolvimento do painel, rode `npm --prefix frontend run dev` e abra [o servidor do frontend](http://localhost:5173). Para as ferramentas de navegação web, instale também o navegador com `.\.venv\Scripts\python.exe -m playwright install chromium`.
+
+## Aplicativo desktop no Windows
+
+Abra o Ollama e execute `.\InstalarAtlasDesktop.cmd` no PowerShell a partir da pasta do Atlas. O instalador baixa o modelo de conversa **Qwen3 4B** e a voz brasileira **Faber** do Piper, instala a janela desktop e gera a interface. Depois, dê dois cliques em **AbrirAtlas.cmd**. A janela usa o WebView2 do Windows e abre sem precisar de uma janela do navegador. Autorize o microfone quando o Windows ou a janela pedir.
+
+Se o Atlas pedir o runtime, instale o [Microsoft Edge WebView2](https://developer.microsoft.com/microsoft-edge/webview2/). O comando de instalação seleciona o Qwen3 e a voz Faber para esta cópia do Atlas; os demais ajustes do `.env` e os dados locais são preservados.
+
+Para abrir a janela ao entrar no Windows, execute `.\ConfigurarInicializacaoAtlas.cmd ativar-janela`. A opção de iniciar só o painel local segue abaixo.
 
 ## Iniciar junto com o Windows
 
@@ -54,7 +62,7 @@ Relatórios de Git e pytest são uma ferramenta opcional. Para habilitá-la, cad
 ## Microfone, voz e janela
 
 - Clique em **Falar com o Atlas** e faça uma pergunta. Depois de uma pausa na fala (ou ao clicar em **Enviar fala**), o Atlas transcreve, envia o pedido e responde por voz. Clique em **Falar com o Atlas** novamente para outro turno. **Cancelar** descarta a gravação. A primeira transcrição pode baixar o modelo Whisper `small`, que roda localmente.
-- A esfera acompanha o ponteiro e reage ao volume do microfone e da resposta em áudio. A síntese usa uma voz pt-BR instalada no Windows. Quando o motor do Windows estiver indisponível, o Atlas tenta uma voz local pt-BR do navegador, animada pelo ritmo das palavras. A resposta sempre fica visível no chat.
+- A esfera acompanha o ponteiro e reage ao volume do microfone e da resposta em áudio. A síntese usa o modelo neural pt-BR do Piper. Instale a voz pela configuração desktop para obter áudio também no painel web. A resposta sempre fica visível no chat.
 - Use **Parar voz** para interromper a leitura. **Ler também respostas digitadas** ativa a voz para pedidos de texto. As ações que exigem autorização continuam aguardando sua decisão no painel.
 - Escolha **Ler janela ou aba**, selecione uma janela ou aba no navegador e deixe o Ollama analisar a captura. Se quiser fazer uma pergunta específica, escreva-a antes de clicar. A captura é pontual e a sessão de compartilhamento é encerrada logo depois.
 - Os modos de terminal continuam disponíveis com `python -m backend.main` e `python -m backend.voice_main`, usando o Python do ambiente virtual.

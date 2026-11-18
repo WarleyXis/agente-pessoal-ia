@@ -13,7 +13,6 @@ export function useVoice(onError: (message: string) => void) {
     session.current = null;
     source.current?.stop();
     source.current = null;
-    window.speechSynthesis?.cancel();
     level.current = 0;
     setSpeaking(false);
   }, []);
@@ -21,7 +20,6 @@ export function useVoice(onError: (message: string) => void) {
   useEffect(() => () => {
     session.current?.abort();
     source.current?.stop();
-    window.speechSynthesis?.cancel();
     void context.current?.close().catch(() => {});
   }, []);
 
@@ -46,7 +44,7 @@ export function useVoice(onError: (message: string) => void) {
     };
     try {
       const audio = context.current;
-      if (!audio || audio.state !== 'running') throw new Error('Áudio indisponível.');
+      if (!audio || audio.state !== 'running') throw new Error('Áudio indisponível nesta janela. Clique em Falar com o Atlas e tente novamente.');
       // Keep the complete reply on screen and limit the spoken excerpt.
       const wav = await spokenAudio(text.slice(0, 3000), run.signal);
       const buffer = await audio.decodeAudioData(wav);
@@ -71,37 +69,10 @@ export function useVoice(onError: (message: string) => void) {
       player.start();
       source.current = player;
       sample();
-    } catch {
+    } catch (error) {
       if (run.signal.aborted) return;
-      const engine = window.speechSynthesis;
-      const voice = engine?.getVoices().find((item) => item.localService && /^pt[-_]?br$/i.test(item.lang));
-      if (!voice || typeof SpeechSynthesisUtterance === 'undefined') {
-        finish();
-        onError('Voz em português do Brasil indisponível. Instale uma voz pt-BR no Windows ou leia a resposta no painel.');
-        return;
-      }
-      const utterance = new SpeechSynthesisUtterance(text.slice(0, 3000));
-      utterance.lang = 'pt-BR';
-      utterance.voice = voice;
-      let lastBoundary = 0;
-      let frame = 0;
-      const pulse = (now: number) => {
-        level.current = 0.13 + Math.max(0, 1 - (now - lastBoundary) / 230) * 0.5;
-        frame = window.requestAnimationFrame(pulse);
-      };
-      utterance.onstart = () => {
-        if (!run.signal.aborted) pulse(performance.now());
-      };
-      utterance.onboundary = () => { lastBoundary = performance.now(); };
-      utterance.onend = () => { window.cancelAnimationFrame(frame); finish(); };
-      utterance.onerror = () => {
-        window.cancelAnimationFrame(frame);
-        if (run.signal.aborted) return;
-        finish();
-        onError('A resposta apareceu no painel, mas o navegador não conseguiu reproduzir a voz.');
-      };
-      run.signal.addEventListener('abort', () => window.cancelAnimationFrame(frame), { once: true });
-      engine.speak(utterance);
+      finish();
+      onError(error instanceof Error ? error.message : 'A resposta apareceu no painel, mas não pôde ser reproduzida.');
     }
   }
 

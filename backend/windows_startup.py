@@ -12,6 +12,7 @@ from traceback import print_exc
 
 ROOT = Path(__file__).resolve().parent.parent
 STARTUP_ARGUMENTS = "-m backend.windows_startup iniciar"
+DESKTOP_ARGUMENTS = "-m backend.desktop"
 HOST = "127.0.0.1"
 PORT = 8000
 
@@ -25,7 +26,7 @@ $path = Join-Path $folder 'Atlas.lnk'
 $shell = New-Object -ComObject WScript.Shell
 $link = $shell.CreateShortcut($path)
 $exists = Test-Path -LiteralPath $path
-if ($exists -and $link.Arguments -ne $env:ATLAS_STARTUP_ARGUMENTS) {
+if ($exists -and $link.Arguments -notin @('-m backend.windows_startup iniciar', '-m backend.desktop')) {
     throw 'Ja existe um atalho Atlas.lnk que pertence a outro aplicativo.'
 }
 if ($env:ATLAS_STARTUP_ACTION -eq 'desativar') {
@@ -49,11 +50,13 @@ def configure(action: str) -> None:
     if sys.platform != "win32":
         raise RuntimeError("A configuração da inicialização automática está disponível no Windows.")
     target = Path(sys.executable).with_name("pythonw.exe")
-    if action == "ativar":
+    if action != "desativar":
         check_panel()
         if not target.is_file():
             raise RuntimeError("Python do ambiente virtual indisponível. Confira o guia de instalação.")
         import uvicorn  # noqa: F401
+        if action == "ativar-janela":
+            import webview  # noqa: F401
 
     powershell = Path(os.environ["SystemRoot"]) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
     result = subprocess.run(
@@ -62,7 +65,7 @@ def configure(action: str) -> None:
             **os.environ,
             "ATLAS_STARTUP_ACTION": action,
             "ATLAS_STARTUP_TARGET": str(target),
-            "ATLAS_STARTUP_ARGUMENTS": STARTUP_ARGUMENTS,
+            "ATLAS_STARTUP_ARGUMENTS": DESKTOP_ARGUMENTS if action == "ativar-janela" else STARTUP_ARGUMENTS,
             "ATLAS_STARTUP_DIRECTORY": str(ROOT),
         },
         capture_output=True,
@@ -72,9 +75,12 @@ def configure(action: str) -> None:
     )
     if result.returncode:
         raise RuntimeError(result.stderr.strip() or "O Windows não conseguiu atualizar o atalho Atlas.")
-    if action == "ativar":
+    if action != "desativar":
         print("Atlas ativado na inicialização da sua conta do Windows.")
-        print("Após entrar no Windows, abra http://localhost:8000.")
+        if action == "ativar-janela":
+            print("A janela do Atlas abrirá quando você entrar no Windows.")
+        else:
+            print("Após entrar no Windows, abra http://localhost:8000.")
     else:
         print("Atlas desativado na inicialização da sua conta do Windows.")
 
@@ -109,7 +115,7 @@ def launch() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("acao", choices=("ativar", "desativar", "iniciar"))
+    parser.add_argument("acao", choices=("ativar", "ativar-janela", "desativar", "iniciar"))
     action = parser.parse_args().acao
     if action == "iniciar":
         return launch()

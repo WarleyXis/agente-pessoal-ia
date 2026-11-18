@@ -38,7 +38,7 @@ def test_vision_validates_png_and_records_description(tmp_path, monkeypatch):
 
 def test_speech_returns_audio_and_reports_unavailable_voice(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "DB_PATH", tmp_path / "atlas.db")
-    synthesize = Mock(side_effect=[b"RIFFsampleWAVE", RuntimeError("voice unavailable")])
+    synthesize = Mock(side_effect=[b"RIFFsampleWAVE", FileNotFoundError("voice unavailable")])
     monkeypatch.setattr(media, "synthesize_wav", synthesize)
     with TestClient(app) as client:
         response = client.post("/api/speak", json={"text": "Olá, Warley"})
