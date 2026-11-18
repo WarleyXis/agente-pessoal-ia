@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Callable, Literal
@@ -14,6 +15,9 @@ from backend.api.reports import init_reports, router as reports_router
 from backend.api.media import router as media_router
 from backend.core.agent import Agent
 from backend.core.config import settings
+from backend.core.llm_provider import OllamaResponseError
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -55,12 +59,37 @@ class Decision(BaseModel):
 def run_model(operation: Callable):
     try:
         return operation()
+    except requests.ConnectTimeout as error:
+        raise HTTPException(504, f"Tempo esgotado ao conectar ao Ollama em {settings.ollama_base_url}.") from error
     except requests.Timeout as error:
-        raise HTTPException(504, "O modelo local demorou demais para responder.") from error
-    except (requests.RequestException, ValueError, KeyError, TypeError, AttributeError) as error:
-        raise HTTPException(502, "Confira se o Ollama está rodando e se o modelo configurado foi instalado.") from error
+        raise HTTPException(504, f"O Ollama demorou demais para responder com {settings.ollama_model}.") from error
+    except requests.ConnectionError as error:
+        raise HTTPException(502, f"Não consegui conectar ao Ollama em {settings.ollama_base_url}.") from error
+    except requests.HTTPError as error:
+        response = error.response
+        status = response.status_code if response is not None else None
+        try:
+            payload = response.json() if response is not None else {}
+        except ValueError:
+            payload = {}
+        detail = payload.get("error") if isinstance(payload, dict) else None
+        detail = " ".join(detail.split())[:400] if isinstance(detail, str) else ""
+        if status == 404 and "model" in detail.lower() and "not found" in detail.lower():
+            raise HTTPException(502, f"O Ollama não encontrou {settings.ollama_model}. Rode: ollama pull {settings.ollama_model}") from error
+        label = f"O Ollama recusou a consulta com {settings.ollama_model}"
+        if status is not None:
+            label += f" (HTTP {status})"
+        raise HTTPException(502, f"{label}. {detail}".rstrip()) from error
+    except OllamaResponseError as error:
+        raise HTTPException(502, str(error)) from error
+    except requests.RequestException as error:
+        logger.exception("Falha na solicitação ao Ollama")
+        raise HTTPException(502, "Erro ao enviar a solicitação ao Ollama. Confira o endereço configurado.") from error
     except OverflowError as error:
         raise HTTPException(429, str(error)) from error
+    except Exception as error:
+        logger.exception("Erro interno ao processar o pedido do Atlas")
+        raise HTTPException(500, f"Erro interno no Atlas ({type(error).__name__}).") from error
 
 
 @app.get("/api/status")

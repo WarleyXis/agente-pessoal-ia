@@ -17,6 +17,10 @@ import requests
 from backend.core.config import settings
 
 
+class OllamaResponseError(requests.RequestException):
+    """Ollama answered with an invalid chat payload."""
+
+
 class LLMProvider(ABC):
     """Interface que todo provedor de modelo de linguagem precisa seguir."""
 
@@ -51,10 +55,18 @@ class OllamaProvider(LLMProvider):
             payload["think"] = False
 
         response = requests.post(
-            f"{self.base_url}/api/chat", json=payload, timeout=120
+            f"{self.base_url.rstrip('/')}/api/chat", json=payload, timeout=(5, 120)
         )
         response.raise_for_status()
-        return response.json()["message"]
+        try:
+            message = response.json().get("message")
+        except (ValueError, AttributeError) as error:
+            raise OllamaResponseError("O Ollama retornou uma resposta de chat inválida.") from error
+        if not isinstance(message, dict) or (
+            message.get("content") is not None and not isinstance(message["content"], str)
+        ):
+            raise OllamaResponseError("O Ollama retornou uma resposta de chat inválida.")
+        return message
 
     def chat_stream(self, messages: list[dict]) -> Iterator[str]:
         payload = {"model": self.model, "messages": messages, "stream": True}
@@ -62,7 +74,7 @@ class OllamaProvider(LLMProvider):
             payload["think"] = False
 
         with requests.post(
-            f"{self.base_url}/api/chat", json=payload, stream=True, timeout=120
+            f"{self.base_url.rstrip('/')}/api/chat", json=payload, stream=True, timeout=(5, 120)
         ) as response:
             response.raise_for_status()
             # Cada linha da resposta é um pedaço de JSON separado —

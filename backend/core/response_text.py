@@ -57,7 +57,7 @@ def final_answer(provider: LLMProvider, content: str) -> str:
                 "Preserve o sentido e os fatos. Retorne somente a resposta em português."
             )},
             {"role": "user", "content": answer},
-        ]).get("content", "")
+        ]).get("content") or ""
     except requests.RequestException:
         rewritten = ""
     localized = public_text(rewritten)

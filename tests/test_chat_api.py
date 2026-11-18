@@ -56,3 +56,38 @@ def test_invalid_tool_arguments_do_not_execute(tmp_path, monkeypatch):
         assert client.post("/api/chat", json={"message": "Que horas são?"}).status_code == 200
         assert "inválidos" in model.chat.call_args.args[0][-1]["content"]
         execute.assert_not_called()
+
+
+def test_chat_shows_original_ollama_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "DB_PATH", tmp_path / "atlas.db")
+    ollama = requests.Response()
+    ollama.status_code = 500
+    ollama._content = b'{"error":"model requires more system memory than is available"}'
+    monkeypatch.setattr("backend.core.llm_provider.requests.post", Mock(return_value=ollama))
+    with TestClient(app) as client:
+        response = client.post("/api/chat", json={"message": "Oi"})
+    assert response.status_code == 502
+    assert "HTTP 500" in response.json()["detail"]
+    assert "more system memory" in response.json()["detail"]
+
+
+def test_chat_reports_missing_configured_model(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "DB_PATH", tmp_path / "atlas.db")
+    monkeypatch.setattr("backend.core.config.settings.ollama_model", "qwen3:4b")
+    ollama = requests.Response()
+    ollama.status_code = 404
+    ollama._content = b'{"error":"model qwen3:4b not found"}'
+    monkeypatch.setattr("backend.core.llm_provider.requests.post", Mock(return_value=ollama))
+    with TestClient(app) as client:
+        response = client.post("/api/chat", json={"message": "Oi"})
+    assert response.status_code == 502
+    assert "ollama pull qwen3:4b" in response.json()["detail"]
+
+
+def test_chat_does_not_mislabel_atlas_failure_as_missing_model(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "DB_PATH", tmp_path / "atlas.db")
+    with TestClient(app) as client:
+        monkeypatch.setattr(app.state.agent.llm_provider, "chat", Mock(side_effect=TypeError))
+        response = client.post("/api/chat", json={"message": "Oi"})
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Erro interno no Atlas (TypeError)."
