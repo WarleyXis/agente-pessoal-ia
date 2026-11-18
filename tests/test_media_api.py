@@ -76,3 +76,18 @@ def test_transcription_decodes_real_recording_before_calling_whisper(tmp_path, m
     assert args[0].shape == (1600,)
     assert np.max(np.abs(args[0])) > 0.01
     assert kwargs == {"language": "pt", "vad_filter": True}
+
+
+def test_speech_keeps_technical_material_in_the_panel(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "DB_PATH", tmp_path / "test.db")
+    synthesize = Mock(return_value=b"RIFFsampleWAVE")
+    monkeypatch.setattr(media, "synthesize_wav", synthesize)
+    with TestClient(app) as client:
+        response = client.post("/api/speak", json={"text": (
+            "<analysis>I should consider the options carefully.</analysis>"
+            "### Posso explicar essa parte.\n\n"
+            "This paragraph is written entirely in English and can be read on the page.\n\n"
+            "```python\nprint('hello')\n```\n\nFonte: https://example.test"
+        )})
+        assert response.status_code == 200
+    synthesize.assert_called_once_with("Posso explicar essa parte.")

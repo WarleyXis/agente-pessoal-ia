@@ -65,4 +65,29 @@ def test_agent_tool_loop_has_safety_limit(tmp_path, monkeypatch):
 
     assert resposta == "Ok, parei por aqui."
     assert fake_provider.chamadas == Agent.MAX_TOOL_ITERATIONS + 1
-    
+
+
+def test_agent_hides_internal_text_and_localizes_english_before_saving(tmp_path, monkeypatch):
+    monkeypatch.setattr(memory_store, "DB_PATH", tmp_path / "test_memory.db")
+    provider = FakeLLMProvider([
+        {
+            "content": "<think>I should consider what the user asked.</think> I can help you find the answer to your question.",
+            "thinking": "another internal message",
+        },
+        {"content": "Posso ajudar você a encontrar a resposta."},
+    ])
+    agent = Agent(llm_provider=provider)
+
+    assert agent.respond("Você pode me ajudar?") == "Posso ajudar você a encontrar a resposta."
+    assert provider.chamadas == 2
+    assert memory_store.load_recent_history()[-1]["content"] == "Posso ajudar você a encontrar a resposta."
+
+
+def test_agent_does_not_read_english_if_localization_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(memory_store, "DB_PATH", tmp_path / "test_memory.db")
+    provider = FakeLLMProvider([
+        {"content": "I can explain what happened and how you can resolve this problem."},
+        {"content": "Sorry, I cannot translate this answer right now."},
+    ])
+    assert "não consegui traduzir" in Agent(llm_provider=provider).respond("O que aconteceu?")
+    assert provider.chamadas == 2

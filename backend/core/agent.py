@@ -7,6 +7,7 @@ from jsonschema import Draft202012Validator
 
 from backend.core.config import settings
 from backend.core.llm_provider import LLMProvider, get_llm_provider
+from backend.core.response_text import final_answer
 from backend.core.security import ask_approval, requires_approval
 from backend.core.tool_router import relevant_domains
 from backend.memory import store as memory_store
@@ -39,7 +40,9 @@ class Agent:
             {"role": "system", "content": (
                 f"Você é {settings.agent_name}, um assistente pessoal local. Responda em português do Brasil "
                 "com naturalidade, em frases que soem bem em voz alta. Comece pela resposta e adapte o detalhe "
-                "ao pedido. Use o contexto das mensagens recentes para resolver referências. "
+                "ao pedido. O idioma das fontes e das ferramentas não muda o idioma da conversa. "
+                "Resuma material de outras línguas em português e deixe citações necessárias separadas. "
+                "Retorne apenas a resposta para a pessoa, sem raciocínio interno nem marcações de execução. Use o contexto das mensagens recentes para resolver referências. "
                 "A entrada pode vir do microfone e conter erros de transcrição. Deduza palavras pelo contexto "
                 "quando o sentido estiver claro. Se faltar informação essencial, faça uma pergunta curta e específica. "
                 "Diferencie conversa, consulta e pedido para agir. Use ferramentas quando precisar verificar algo real. "
@@ -123,7 +126,7 @@ class Agent:
         messages, final = yield from self._run_tools(user_message)
         if final is None:
             final = self.llm_provider.chat(messages)
-        response = final.get("content") or "O Atlas não recebeu uma resposta de texto do modelo."
+        response = final_answer(self.llm_provider, final.get("content") or "")
         memory_store.save_turn(user_message, response)
         return response
 
@@ -144,11 +147,9 @@ class Agent:
     def respond_stream(self, user_message: str) -> Iterator[str]:
         messages, final = self._confirm_in_terminal(self._run_tools(user_message))
         if final is not None:
-            chunks = iter([final.get("content") or "O modelo não devolveu texto."])
+            content = final.get("content") or ""
         else:
-            chunks = self.llm_provider.chat_stream(messages)
-        parts = []
-        for chunk in chunks:
-            parts.append(chunk)
-            yield chunk
-        memory_store.save_turn(user_message, "".join(parts))
+            content = "".join(self.llm_provider.chat_stream(messages))
+        response = final_answer(self.llm_provider, content)
+        memory_store.save_turn(user_message, response)
+        yield response

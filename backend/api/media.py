@@ -10,6 +10,7 @@ from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, StringConstraints
 from starlette.concurrency import run_in_threadpool
 
+from backend.core.response_text import speech_text
 from backend.memory.store import save_turn
 from backend.tools.vision_tools import describe_image
 from backend.voice.tts import synthesize_wav
@@ -86,7 +87,7 @@ class SpeechRequest(BaseModel):
 @router.post("/speak")
 def speak(request: SpeechRequest) -> Response:
     try:
-        audio = synthesize_wav(request.text)
+        audio = synthesize_wav(speech_text(request.text))
     except (FileNotFoundError, ImportError) as error:
         raise HTTPException(503, "Instale a voz local com InstalarAtlasDesktop.cmd e reinicie o Atlas.") from error
     except Exception as error:

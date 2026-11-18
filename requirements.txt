@@ -12,3 +12,4 @@ pyautogui>=0.9.54; sys_platform == "win32"
 pygetwindow>=0.0.9; sys_platform == "win32"
 playwright>=1.47
 jsonschema>=4.20
+langdetect==1.0.9
