@@ -49,3 +49,30 @@ def test_speech_returns_audio_and_reports_unavailable_voice(tmp_path, monkeypatc
         assert client.post("/api/speak", json={"text": "Atlas"}).status_code == 503
         assert client.post("/api/speak", json={"text": ""}).status_code == 422
     assert synthesize.call_count == 2
+
+
+def test_transcription_decodes_real_recording_before_calling_whisper(tmp_path, monkeypatch):
+    import wave
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from backend.voice import stt
+
+    recording = BytesIO()
+    waveform = np.tile(np.array([1000, 2000], dtype="<i2"), (4800, 1))
+    with wave.open(recording, "wb") as output:
+        output.setparams((2, 2, 48000, 0, "NONE", "not compressed"))
+        output.writeframes(waveform.tobytes())
+
+    model = Mock()
+    model.transcribe.return_value = ([SimpleNamespace(text=" Teste de voz.")], None)
+    monkeypatch.setattr(stt, "_get_model", lambda: model)
+    path = tmp_path / "recording.wav"
+    path.write_bytes(recording.getvalue())
+    assert stt.transcribe_audio(str(path)) == "Teste de voz."
+    args, kwargs = model.transcribe.call_args
+    assert args[0].dtype == np.float32
+    assert args[0].shape == (1600,)
+    assert np.max(np.abs(args[0])) > 0.01
+    assert kwargs == {"language": "pt", "vad_filter": True}

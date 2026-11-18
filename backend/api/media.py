@@ -47,7 +47,7 @@ async def post_transcription(request: Request) -> dict:
     kind, audio = await read_media(request, set(formats))
     try:
         text = await run_in_threadpool(transcribe, audio, formats[kind])
-    except (OSError, ValueError, ImportError, RuntimeError) as error:
+    except (OSError, ValueError, TypeError, ImportError, RuntimeError) as error:
         raise HTTPException(502, "Não foi possível transcrever. Confira a gravação e o modelo Whisper local.") from error
     if not text:
         raise HTTPException(422, "Nenhuma fala foi reconhecida.")
