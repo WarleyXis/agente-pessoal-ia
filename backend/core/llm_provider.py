@@ -15,6 +15,7 @@ from typing import Iterator
 import requests
 
 from backend.core.config import settings
+from backend.core.ollama_timing import current_timing
 
 
 class OllamaResponseError(requests.RequestException):
@@ -55,18 +56,24 @@ class OllamaProvider(LLMProvider):
         if self.model.split(":", 1)[0] == "qwen3":
             payload["think"] = False
 
+        timing = current_timing.get()
+        if timing is not None:
+            timing.model = self.model
         response = requests.post(
             f"{self.base_url.rstrip('/')}/api/chat", json=payload, timeout=(5, 120)
         )
         response.raise_for_status()
         try:
-            message = response.json().get("message")
+            result = response.json()
+            message = result.get("message")
         except (ValueError, AttributeError) as error:
             raise OllamaResponseError("O Ollama retornou uma resposta de chat inválida.") from error
         if not isinstance(message, dict) or (
             message.get("content") is not None and not isinstance(message["content"], str)
         ):
             raise OllamaResponseError("O Ollama retornou uma resposta de chat inválida.")
+        if timing is not None:
+            timing.record(result)
         return message
 
     def chat_stream(self, messages: list[dict]) -> Iterator[str]:
@@ -89,11 +96,11 @@ class OllamaProvider(LLMProvider):
                     yield content
 
 
-def get_llm_provider() -> LLMProvider:
+def get_llm_provider(model: str | None = None) -> LLMProvider:
     """'Fábrica' que decide qual provedor usar, baseado na configuração."""
     if settings.llm_provider == "ollama":
         return OllamaProvider(
-            model=settings.ollama_model,
+            model=model or settings.ollama_model,
             base_url=settings.ollama_base_url,
             keep_alive=settings.ollama_keep_alive,
         )

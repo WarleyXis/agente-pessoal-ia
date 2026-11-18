@@ -113,3 +113,30 @@ def test_spoken_chat_requests_shorter_answers_and_uses_recent_context(tmp_path, 
         messages = model.chat.call_args.args[0]
         assert "uma ou duas frases curtas" not in messages[0]["content"]
         assert messages[1]["content"] == "Pergunta 0"
+
+
+def test_fast_voice_selects_smaller_model_and_returns_ollama_timings(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "DB_PATH", tmp_path / "atlas.db")
+    monkeypatch.setattr("backend.core.config.settings.ollama_model", "qwen3:4b")
+    monkeypatch.setattr("backend.core.config.settings.ollama_fast_model", "qwen3:1.7b")
+    ollama = Mock()
+    ollama.json.return_value = {
+        "message": {"content": "Oi!"},
+        "load_duration": 1_250_000_000,
+        "prompt_eval_duration": 2_000_000_000,
+        "eval_duration": 3_500_000_000,
+    }
+    post = Mock(return_value=ollama)
+    monkeypatch.setattr("backend.core.llm_provider.requests.post", post)
+    with TestClient(app) as client:
+        response = client.post("/api/chat", json={"message": "Oi", "spoken": True, "fast": True})
+        assert response.json() == {
+            "response": "Oi!",
+            "ollama_timing": {
+                "model": "qwen3:1.7b", "load_ms": 1250, "prompt_ms": 2000,
+                "generation_ms": 3500, "calls": 1,
+            },
+        }
+        assert post.call_args.kwargs["json"]["model"] == "qwen3:1.7b"
+        response = client.post("/api/chat", json={"message": "Oi", "fast": True})
+        assert response.json()["ollama_timing"]["model"] == "qwen3:4b"

@@ -29,6 +29,12 @@ Se o Atlas pedir o runtime, instale o [Microsoft Edge WebView2](https://develope
 
 Para abrir a janela ao entrar no Windows, execute `.\ConfigurarInicializacaoAtlas.cmd ativar-janela`. A opção de iniciar só o painel local segue abaixo.
 
+### Conversa por voz mais rápida
+
+Para experimentar um modelo menor em conversas por voz, rode `ollama pull qwen3:1.7b` e marque **Voz rápida** abaixo da esfera. Desmarque para voltar ao modelo principal. O chat digitado continua usando o modelo principal.
+
+Após falar, o painel mostra o tempo de transcrição, resposta e preparação do áudio. Quando o Ollama envia as métricas, o Atlas mostra também o tempo para carregar o modelo, ler o contexto e gerar o texto.
+
 ## Iniciar junto com o Windows
 
 Depois de instalar as dependências e gerar o painel, execute uma vez na pasta do Atlas:

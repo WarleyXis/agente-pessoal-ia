@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { api, getStatus, sendMessage, type ChatResult, type Report } from './api';
+import { api, getStatus, sendMessage, type ChatResult, type OllamaTiming, type Report } from './api';
 import { Reports } from './Reports';
 import { PersonalActions } from './PersonalActions';
 import { Microphone } from './Microphone';
@@ -27,6 +27,8 @@ function App() {
   const [name, setName] = useState('Atlas');
   const [online, setOnline] = useState(false);
   const [model, setModel] = useState('');
+  const [fastModel, setFastModel] = useState('');
+  const [fastVoice, setFastVoice] = useState(() => localStorage.getItem('atlas-fast-voice') === 'true');
   const [messages, setMessages] = useState<Message[]>([]);
   const messageList = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState('');
@@ -34,7 +36,7 @@ function App() {
   const [error, setError] = useState('');
   const voice = useVoice(setError);
   const spokenApproval = useRef(false);
-  const [voiceTimes, setVoiceTimes] = useState<{ recognition: number; reply?: number; playback?: number } | null>(null);
+  const [voiceTimes, setVoiceTimes] = useState<{ recognition: number; reply?: number; playback?: number; ollama?: OllamaTiming } | null>(null);
   const [listening, setListening] = useState(false);
   const [speak, setSpeak] = useState(false);
   const [approval, setApproval] = useState<Extract<ChatResult, { approval: unknown }>['approval'] | null>(null);
@@ -47,6 +49,7 @@ function App() {
     getStatus().then((status) => {
       setName(status.agent_name);
       setModel(status.model);
+      setFastModel(status.fast_model);
       setOnline(true);
     }).catch(() => setError('Backend indisponível. Inicie o Atlas e recarregue a página.'));
     api<string[]>('/projects').then((items) => {
@@ -101,8 +104,9 @@ function App() {
     function deliver(result: ChatResult) {
       const reply = performance.now() - started;
       if (recognition !== undefined) {
-        setVoiceTimes({ recognition, reply });
-        show(result, spoken, (playback) => setVoiceTimes({ recognition, reply, playback }));
+        const timing = { recognition, reply, ollama: result.ollama_timing };
+        setVoiceTimes(timing);
+        show(result, spoken, (playback) => setVoiceTimes({ ...timing, playback }));
       } else {
         show(result, spoken);
       }
@@ -118,7 +122,7 @@ function App() {
       deliver({ response: `Relatório de ${target} disponível no painel de projetos.` });
       return;
     }
-    deliver(await sendMessage(message, spoken));
+    deliver(await sendMessage(message, spoken, recognition !== undefined && fastVoice));
   }
 
   function submit(event: FormEvent) {
@@ -161,10 +165,23 @@ function App() {
               }} />
             {(voice.speaking || voice.preparing) && <button type="button" onClick={voice.stop}>Parar voz</button>}
           </div>
+          {fastModel && <label className="checkbox">
+            <input type="checkbox" checked={fastVoice} onChange={(event) => {
+              setFastVoice(event.target.checked);
+              localStorage.setItem('atlas-fast-voice', String(event.target.checked));
+            }} disabled={listening || !!busy} /> Voz rápida · {fastModel}
+          </label>}
           {voiceTimes && <p className="voice-times">
             Transcrição {(voiceTimes.recognition / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s
             {voiceTimes.reply !== undefined && ` · Resposta ${(voiceTimes.reply / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s`}
             {voiceTimes.playback !== undefined && ` · Áudio ${(voiceTimes.playback / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s`}
+          </p>}
+          {voiceTimes?.ollama && <p className="voice-times">
+            Modelo {voiceTimes.ollama.model}
+            {' · Carregamento '}{(voiceTimes.ollama.load_ms / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s
+            {' · Contexto '}{(voiceTimes.ollama.prompt_ms / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s
+            {' · Geração '}{(voiceTimes.ollama.generation_ms / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s
+            {' · '}{voiceTimes.ollama.calls} {voiceTimes.ollama.calls === 1 ? 'consulta' : 'consultas'}
           </p>}
         </div>
       </section>

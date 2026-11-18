@@ -35,9 +35,13 @@ class Agent:
         self.tool_registry = tool_registry or build_default_registry()
         memory_store.init_db()
 
-    def _run_tools(self, user_message: str, *, spoken: bool = False) -> Generator[Approval, bool, tuple[list, dict | None]]:
-        history = (memory_store.load_recent_history(limit=8) if spoken
-                   else memory_store.load_recent_history())
+    def _run_tools(
+        self, user_message: str, provider: LLMProvider, *, spoken: bool = False, fast: bool = False,
+    ) -> Generator[Approval, bool, tuple[list, dict | None]]:
+        if spoken:
+            history = memory_store.load_recent_history(limit=4 if fast else 8)
+        else:
+            history = memory_store.load_recent_history()
         voice_instruction = (
             " Este é um turno de voz. Para perguntas simples, responda em uma ou duas frases curtas. "
             "Dê mais detalhes quando a pergunta pedir. Em listas longas, fale primeiro o resultado principal."
@@ -65,7 +69,7 @@ class Agent:
         available = {item["function"]["name"] for item in schemas}
         remaining = self.MAX_TOOL_CALLS
         for _ in range(self.MAX_TOOL_ITERATIONS):
-            message = self.llm_provider.chat(messages, tools=schemas)
+            message = provider.chat(messages, tools=schemas)
             calls = message.get("tool_calls") or []
             if not calls:
                 return messages, message
@@ -130,11 +134,13 @@ class Agent:
         )
         return result
 
-    def run(self, user_message: str, *, spoken: bool = False) -> Generator[Approval, bool, str]:
-        messages, final = yield from self._run_tools(user_message, spoken=spoken)
+    def run(self, user_message: str, *, spoken: bool = False, fast: bool = False) -> Generator[Approval, bool, str]:
+        use_fast_model = spoken and fast
+        provider = get_llm_provider(settings.ollama_fast_model) if use_fast_model else self.llm_provider
+        messages, final = yield from self._run_tools(user_message, provider, spoken=spoken, fast=use_fast_model)
         if final is None:
-            final = self.llm_provider.chat(messages)
-        response = final_answer(self.llm_provider, final.get("content") or "")
+            final = provider.chat(messages)
+        response = final_answer(provider, final.get("content") or "")
         memory_store.save_turn(user_message, response)
         return response
 
@@ -153,7 +159,7 @@ class Agent:
         return self._confirm_in_terminal(self.run(user_message))
 
     def respond_stream(self, user_message: str) -> Iterator[str]:
-        messages, final = self._confirm_in_terminal(self._run_tools(user_message, spoken=True))
+        messages, final = self._confirm_in_terminal(self._run_tools(user_message, self.llm_provider, spoken=True))
         if final is not None:
             content = final.get("content") or ""
         else:

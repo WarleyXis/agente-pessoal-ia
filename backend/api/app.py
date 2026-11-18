@@ -16,6 +16,7 @@ from backend.api.media import router as media_router
 from backend.core.agent import Agent
 from backend.core.config import settings
 from backend.core.llm_provider import OllamaResponseError
+from backend.core.ollama_timing import current_timing, OllamaTiming
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ async def local_origin(request: Request, call_next):
 class ChatRequest(BaseModel):
     message: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=12000)]
     spoken: StrictBool = False
+    fast: StrictBool = False
 
 
 class PersonalAction(BaseModel):
@@ -58,12 +60,17 @@ class Decision(BaseModel):
 
 
 def run_model(operation: Callable):
+    timing = OllamaTiming()
+    token = current_timing.set(timing)
     try:
-        return operation()
+        output = operation()
+        if timing.calls:
+            output["ollama_timing"] = timing.public_data()
+        return output
     except requests.ConnectTimeout as error:
         raise HTTPException(504, f"Tempo esgotado ao conectar ao Ollama em {settings.ollama_base_url}.") from error
     except requests.Timeout as error:
-        raise HTTPException(504, f"O Ollama demorou demais para responder com {settings.ollama_model}.") from error
+        raise HTTPException(504, f"O Ollama demorou demais para responder com {timing.model or settings.ollama_model}.") from error
     except requests.ConnectionError as error:
         raise HTTPException(502, f"Não consegui conectar ao Ollama em {settings.ollama_base_url}.") from error
     except requests.HTTPError as error:
@@ -75,9 +82,10 @@ def run_model(operation: Callable):
             payload = {}
         detail = payload.get("error") if isinstance(payload, dict) else None
         detail = " ".join(detail.split())[:400] if isinstance(detail, str) else ""
+        model = timing.model or settings.ollama_model
         if status == 404 and "model" in detail.lower() and "not found" in detail.lower():
-            raise HTTPException(502, f"O Ollama não encontrou {settings.ollama_model}. Rode: ollama pull {settings.ollama_model}") from error
-        label = f"O Ollama recusou a consulta com {settings.ollama_model}"
+            raise HTTPException(502, f"O Ollama não encontrou {model}. Rode: ollama pull {model}") from error
+        label = f"O Ollama recusou a consulta com {model}"
         if status is not None:
             label += f" (HTTP {status})"
         raise HTTPException(502, f"{label}. {detail}".rstrip()) from error
@@ -91,16 +99,21 @@ def run_model(operation: Callable):
     except Exception as error:
         logger.exception("Erro interno ao processar o pedido do Atlas")
         raise HTTPException(500, f"Erro interno no Atlas ({type(error).__name__}).") from error
+    finally:
+        current_timing.reset(token)
 
 
 @app.get("/api/status")
 def get_status() -> dict:
-    return {"agent_name": settings.agent_name, "status": "online", "model": settings.ollama_model}
+    return {
+        "agent_name": settings.agent_name, "status": "online",
+        "model": settings.ollama_model, "fast_model": settings.ollama_fast_model,
+    }
 
 
 @app.post("/api/chat")
 def post_chat(body: ChatRequest, request: Request) -> dict:
-    execution = request.app.state.agent.run(body.message, spoken=body.spoken)
+    execution = request.app.state.agent.run(body.message, spoken=body.spoken, fast=body.fast)
     return run_model(lambda: request.app.state.approvals.advance(execution, lambda: next(execution)))
 
 
