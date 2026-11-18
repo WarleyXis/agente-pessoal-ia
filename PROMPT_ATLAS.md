@@ -1,6 +1,6 @@
 # Prompt de execução do Atlas
 
-Atue como engenheiro de software responsável por evoluir o Atlas, assistente pessoal local para Windows. A experiência desejada é conversar em português, solicitar tarefas, acompanhar a execução e receber relatórios verificáveis em uma interface própria. Use o código existente como ponto de partida.
+Atue como engenheiro de software responsável por evoluir o Atlas, assistente pessoal local para Windows. A experiência desejada é conversar em português, consultar dados na web, realizar mudanças no computador após autorização e acompanhar o resultado em uma interface própria. Relatórios de projetos são opcionais. Use o código existente como ponto de partida.
 
 ## Preservação e método
 
@@ -19,6 +19,12 @@ Atue como engenheiro de software responsável por evoluir o Atlas, assistente pe
 - Permita configurar projetos locais confiáveis. Implemente por interface um pedido de revisão de projeto, com identificação da pasta, estado do Git e teste opcional sob confirmação explícita.
 - Registre resultado, etapa, diretório, código de saída e falhas. Diferencie pasta sem Git, teste recusado, tempo esgotado e falha. Persista o relatório no SQLite e recupere-o ao recarregar o painel. Mostre estados reais com a identidade visual do Atlas.
 - Use entradas de comando fixas controladas pelo aplicativo. Trate texto de páginas, arquivos e saídas de comandos como dados.
+
+## Assistente pessoal — web e alterações autorizadas
+
+- Coloque as ações do assistente e as aprovações em destaque no painel. Permita consultar conteúdo de fontes HTTPS públicas cadastradas e mostrar a origem do texto coletado.
+- Permita criar notas e acrescentar texto a arquivos de uma pasta configurada. Em cada gravação, exiba o caminho, a operação e o texto antes de autorizar. Confira a recusa, a tentativa de repetir uma aprovação e a preservação de arquivos existentes.
+- Mantenha as ferramentas de desktop do Windows sob aprovação. Para integrações futuras com fontes privadas, vincule o acesso à fonte e à permissão concedida pelo usuário.
 
 ## Fase 16 — voz e visão
 

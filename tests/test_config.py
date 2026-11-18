@@ -8,14 +8,14 @@ from backend.core.config import Settings
 def test_default_agent_name():
     """
     Confirma que, sem nenhuma variável de ambiente definida,
-    o nome padrão do agente é 'JARVIS'.
+    o nome padrão do agente é 'Atlas'.
 
     _env_file=None diz ao Pydantic: "não leia o .env real da
     minha máquina para este teste" — assim o teste sempre dá o
     mesmo resultado, não importa o que estiver no seu .env.
     """
     s = Settings(_env_file=None)
-    assert s.agent_name == "JARVIS"
+    assert s.agent_name == "Atlas"
 
 
 def test_agent_name_from_env(monkeypatch):

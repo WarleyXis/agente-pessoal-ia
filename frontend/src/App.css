@@ -28,3 +28,11 @@ pre { overflow: auto; max-height: 17rem; white-space: pre-wrap; overflow-wrap: a
 .error { border-left: 3px solid #ff9a91; background: #351d2a; padding: .75rem; }
 @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
 .media { margin-top: .75rem; align-items: center; }
+
+.side-panel { display: grid; gap: 1rem; min-width: 0; }
+.personal-actions form { display: grid; gap: .45rem; }
+.personal-actions form + form { border-top: 1px solid #253b56; margin-top: 1rem; padding-top: 1rem; }
+.personal-actions :is(input, textarea) { width: 100%; min-width: 0; }
+.personal-actions textarea { resize: vertical; }
+.personal-actions button { justify-self: start; }
+.approval p { overflow-wrap: anywhere; }

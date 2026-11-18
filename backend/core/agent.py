@@ -94,7 +94,11 @@ class Agent:
             return name, "A ferramenta recebeu argumentos inválidos.", False
 
         if requires_approval(tool.risk_level):
-            approved = yield Approval(name, arguments.copy())
+            try:
+                details = tool.approval_details(arguments)
+            except ValueError as error:
+                return name, str(error), False
+            approved = yield Approval(name, details)
             if not approved:
                 return name, "Ação recusada pelo usuário.", True
 
@@ -103,6 +107,12 @@ class Agent:
         except Exception:
             logger.exception("Falha ao executar a ferramenta %s", name)
             return name, "Falha na execução da ferramenta. Confira as dependências e tente novamente.", False
+
+    def run_action(self, name: str, arguments: dict) -> Generator[Approval, bool, str]:
+        _, result, _ = yield from self._execute(
+            {"function": {"name": name, "arguments": arguments}}, {name},
+        )
+        return result
 
     def run(self, user_message: str) -> Generator[Approval, bool, str]:
         messages, final = yield from self._run_tools(user_message)

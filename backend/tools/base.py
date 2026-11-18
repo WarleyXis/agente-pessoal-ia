@@ -32,6 +32,9 @@ class Tool(ABC):
     risk_level: RiskLevel
     domain: str = "general"
 
+    def approval_details(self, arguments: dict) -> dict:
+        return arguments.copy()
+
     @abstractmethod
     def parameters_schema(self) -> dict:
         """

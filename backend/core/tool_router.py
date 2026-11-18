@@ -18,6 +18,7 @@ DOMAIN_KEYWORDS: dict[str, list[str]] = {
         "site", "navegador", "pesquis", "busca", "internet", "url",
         "página", "web",
     ],
+    "notes": ["nota", "anota", "texto", "salv", "crie", "acrescent"],
     "coding": ["arquivo", "código", "teste", "git", "pytest", "commit"],
 }
 

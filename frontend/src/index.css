@@ -8,8 +8,8 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; }
-button, input, select { font: inherit; }
-button, input, select {
+button, input, select, textarea { font: inherit; }
+button, input, select, textarea {
   border: 1px solid #334762;
   border-radius: 8px;
   color: inherit;

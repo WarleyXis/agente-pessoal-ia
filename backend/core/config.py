@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     )
 
     # --- identidade e comportamento geral ---
-    agent_name: str = "JARVIS"
+    agent_name: str = "Atlas"
     log_level: str = "INFO"
     environment: str = "development"
 
@@ -38,5 +38,7 @@ class Settings(BaseSettings):
     voice_record_seconds: int = Field(default=5, ge=1, le=30)
     frontend_origin: str = "http://localhost:5173"
     projects_file: str = "data/projects.json"
+    notes_directory: str = "data/notas"
+    web_hosts: str = "pt.wikipedia.org,www.gov.br,docs.python.org"
 
 settings = Settings()

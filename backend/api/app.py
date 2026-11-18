@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Callable
+from typing import Annotated, Callable, Literal
 
 import requests
 from fastapi import FastAPI, HTTPException, Request
@@ -43,6 +43,11 @@ class ChatRequest(BaseModel):
     message: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=12000)]
 
 
+class PersonalAction(BaseModel):
+    tool: Literal["open_url", "save_note"]
+    arguments: dict
+
+
 class Decision(BaseModel):
     approved: StrictBool
 
@@ -66,6 +71,12 @@ def get_status() -> dict:
 @app.post("/api/chat")
 def post_chat(body: ChatRequest, request: Request) -> dict:
     execution = request.app.state.agent.run(body.message)
+    return run_model(lambda: request.app.state.approvals.advance(execution, lambda: next(execution)))
+
+
+@app.post("/api/actions")
+def personal_action(body: PersonalAction, request: Request) -> dict:
+    execution = request.app.state.agent.run_action(body.tool, body.arguments)
     return run_model(lambda: request.app.state.approvals.advance(execution, lambda: next(execution)))
 
 

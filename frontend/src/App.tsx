@@ -1,9 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, getStatus, sendMessage, type ChatResult, type Report } from './api';
 import { Reports } from './Reports';
+import { PersonalActions } from './PersonalActions';
 import { Microphone } from './Microphone';
 import { captureWindow, speakLocally, uploadMedia } from './media';
 import './App.css';
+
+const actionLabels: Record<string, string> = {
+  open_url: 'Consultar página pública',
+  save_note: 'Gravar nota no computador',
+  open_application: 'Abrir aplicativo',
+  click_at: 'Clicar no computador',
+  type_text: 'Digitar no computador',
+  describe_screen: 'Capturar a tela',
+  run_tests: 'Executar testes',
+};
 
 interface Message {
   role: 'user' | 'assistant';
@@ -109,8 +120,12 @@ function App() {
           </article>)}
         </div>
         {approval && <section className="approval">
-          <h3>{approval.tool}</h3>
-          <pre>{JSON.stringify(approval.arguments, null, 2)}</pre>
+          <h3>{actionLabels[approval.tool] || approval.tool}</h3>
+          {approval.tool === 'save_note' ? <>
+            <p>{approval.arguments.mode === 'append' ? 'Acrescentar texto' : 'Criar arquivo'} em <strong>{String(approval.arguments.path)}</strong></p>
+            <pre>{String(approval.arguments.content)}</pre>
+          </> : <pre>{approval.tool === 'open_url'
+            ? String(approval.arguments.url) : JSON.stringify(approval.arguments, null, 2)}</pre>}
           <div className="actions">{[true, false].map((approved) =>
             <button key={String(approved)} disabled={!!busy} onClick={() => {
               void action('Processando decisão', async () => {
@@ -146,25 +161,30 @@ function App() {
           {speak && <button onClick={() => window.speechSynthesis?.cancel()}>Parar voz</button>}
         </div>
       </section>
-      <section className="card" aria-label="Projetos">
-        <h2>Projetos</h2>
-        {projects.length > 0 ? <form onSubmit={(event) => {
-          event.preventDefault();
-          void action('Consultando projeto', async () => { await createReview(project, withTests); });
-        }}>
-          <label htmlFor="project">Projeto</label>
-          <select id="project" value={project} onChange={(event) => setProject(event.target.value)}>
-            {projects.map((item) => <option key={item}>{item}</option>)}
-          </select>
-          <label className="checkbox"><input type="checkbox" checked={withTests} onChange={(event) => setWithTests(event.target.checked)} /> Incluir testes</label>
-          <button disabled={!!busy}>Gerar relatório</button>
-        </form> : <p className="muted">Cadastre seus projetos em <code>data/projects.json</code>.</p>}
-        <Reports reports={reports} busy={busy} decide={(report, approved) => {
-          void action(approved ? 'Executando testes' : 'Registrando recusa', async () => {
-            record(await api<Report>(`/reports/${report.id}/decision`, { approved }));
-          });
+      <aside className="side-panel">
+        <PersonalActions disabled={!online || !!busy || !!approval || listening} run={(request) => {
+          void action('Preparando ação', async () => show(await api<ChatResult>('/actions', request)));
         }} />
-      </section>
+        {(projects.length > 0 || reports.length > 0) && <details className="card" aria-label="Projetos">
+          <summary>Relatórios de projetos</summary>
+          {projects.length > 0 ? <form onSubmit={(event) => {
+            event.preventDefault();
+            void action('Consultando projeto', async () => { await createReview(project, withTests); });
+          }}>
+            <label htmlFor="project">Projeto</label>
+            <select id="project" value={project} onChange={(event) => setProject(event.target.value)}>
+              {projects.map((item) => <option key={item}>{item}</option>)}
+            </select>
+            <label className="checkbox"><input type="checkbox" checked={withTests} onChange={(event) => setWithTests(event.target.checked)} /> Incluir testes</label>
+            <button disabled={!!busy || !!approval || listening}>Gerar relatório</button>
+          </form> : <p className="muted">Cadastre seus projetos em <code>data/projects.json</code>.</p>}
+          <Reports reports={reports} busy={busy || (approval || listening ? 'Aguardando' : '')} decide={(report, approved) => {
+            void action(approved ? 'Executando testes' : 'Registrando recusa', async () => {
+              record(await api<Report>(`/reports/${report.id}/decision`, { approved }));
+            });
+          }} />
+        </details>}
+      </aside>
     </div>
   </main>;
 }

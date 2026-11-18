@@ -1,6 +1,6 @@
 # Atlas
 
-Assistente pessoal que roda localmente, com chat em português, aprovações no painel e relatórios de projetos. Os dados da instalação ficam em `data/` e a configuração fica em `.env`.
+Assistente pessoal que roda no seu computador, com conversa em português, consultas à web e ações locais mediante aprovação no painel. Os dados da instalação ficam em `data/` e a configuração fica em `.env`.
 
 ## Instalação no Windows
 
@@ -21,20 +21,15 @@ Abra [Atlas local](http://localhost:8000). Mude `AGENT_NAME` no `.env` para pers
 
 Para desenvolvimento do painel, rode `npm --prefix frontend run dev` e abra [o servidor do frontend](http://localhost:5173). Para as ferramentas de navegação web, instale também o navegador com `.\.venv\Scripts\python.exe -m playwright install chromium`.
 
-## Projetos e relatórios
+## Web e arquivos
 
-Crie `data/projects.json` com as pastas de projetos confiáveis deste computador. Use caminhos absolutos. O campo `python` é opcional e deve apontar para o Python do ambiente desse projeto. Sem ele, o Atlas usa o próprio Python.
+No painel **Web e arquivos**, cole o endereço HTTPS de uma página pública ou prepare uma nota. O Atlas mostra o endereço antes da consulta e, para uma gravação, mostra a operação, o caminho completo e o texto a salvar. A recusa encerra a ação. Esses controles funcionam com o backend ligado, mesmo com o Ollama desligado. Você também pode solicitar as ações em linguagem natural pelo chat.
 
-```json
-{
-  "Finance Hub": {
-    "path": "C:/Projetos/FinanceHub",
-    "python": "C:/Projetos/FinanceHub/.venv/Scripts/python.exe"
-  }
-}
-```
+- Configure `WEB_HOSTS` no `.env` com uma lista de domínios públicos confiáveis separados por vírgula. A consulta extrai texto e informa a fonte. Sites privados, páginas que exigem login e páginas dependentes de JavaScript podem precisar de uma integração própria.
+- Use `NOTES_DIRECTORY` no `.env` para escolher a pasta de notas. O padrão é `data/notas`. O Atlas pode criar arquivos `.txt` ou `.md` e acrescentar texto aos que já existem nessa pasta. Criar uma nota com nome já existente preserva o arquivo.
+- Em Windows, o chat também pode pedir autorização para abrir aplicativos permitidos, clicar e digitar. Revise a ação no painel antes de aprová-la.
 
-No painel **Projetos**, selecione o projeto e gere um relatório. Pelo chat do painel, você também pode pedir “Revise meu Finance Hub e me diga se os testes passaram”. O Atlas consulta o Git local quando há metadados do repositório, mostra o comando antes de rodar pytest e guarda o relatório no SQLite. O pytest roda na raiz cadastrada. Use a opção de testes com projetos cujo código você confia. O relatório também funciona para pastas sem Git.
+Relatórios de Git e pytest são uma ferramenta opcional. Para habilitá-la, cadastre projetos confiáveis em `data/projects.json` no formato `{"Projeto de exemplo":{"path":"C:/Projetos/Exemplo"}}`. O campo opcional `python` aponta para o interpretador do projeto. O pytest roda na raiz cadastrada após aprovação.
 
 ## Microfone, voz e janela
 
