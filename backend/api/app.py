@@ -10,6 +10,7 @@ from pydantic import BaseModel, StrictBool, StringConstraints
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from backend.api.approvals import Approvals
+from backend.api.reports import init_reports, router as reports_router
 from backend.core.agent import Agent
 from backend.core.config import settings
 
@@ -17,6 +18,7 @@ from backend.core.config import settings
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.agent = Agent()
+    init_reports()
     app.state.approvals = Approvals()
     try:
         yield
@@ -73,6 +75,8 @@ def decide(key: str, decision: Decision, request: Request) -> dict:
         raise HTTPException(404, "A aprovação expirou ou já foi processada.")
     return run_model(lambda: request.app.state.approvals.advance(execution, lambda: execution.send(decision.approved)))
 
+
+app.include_router(reports_router)
 
 dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if dist.is_dir():
