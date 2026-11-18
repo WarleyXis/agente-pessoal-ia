@@ -21,6 +21,26 @@ Abra [Atlas local](http://localhost:8000). Mude `AGENT_NAME` no `.env` para pers
 
 Para desenvolvimento do painel, rode `npm --prefix frontend run dev` e abra [o servidor do frontend](http://localhost:5173). Para as ferramentas de navegação web, instale também o navegador com `.\.venv\Scripts\python.exe -m playwright install chromium`.
 
+## Iniciar junto com o Windows
+
+Depois de instalar as dependências e gerar o painel, execute uma vez na pasta do Atlas:
+
+```powershell
+.\ConfigurarInicializacaoAtlas.cmd
+```
+
+O atalho **Atlas** é adicionado à pasta de inicialização da sua conta, sem precisar de administrador. Ao entrar no Windows, o Atlas inicia em segundo plano. Abra [o painel local](http://localhost:8000) no navegador quando quiser usar. O servidor escuta apenas em `127.0.0.1`.
+
+O chat e a visão usam o Ollama. O instalador oficial do Ollama para Windows registra sua própria inicialização com a sessão. Se você desativou essa opção, reative o Ollama em **Configurações → Aplicativos → Inicialização** para ter os modelos disponíveis ao entrar. Se o painel não abrir, confira `data/inicializacao.log` e se a porta 8000 está ocupada.
+
+Para desativar a inicialização do Atlas:
+
+```powershell
+.\ConfigurarInicializacaoAtlas.cmd desativar
+```
+
+Esse comando remove o atalho de futuros logins. Se mudar a pasta do Atlas, execute a ativação novamente no novo local.
+
 ## Web e arquivos
 
 No painel **Web e arquivos**, cole o endereço HTTPS de uma página pública ou prepare uma nota. O Atlas mostra o endereço antes da consulta e, para uma gravação, mostra a operação, o caminho completo e o texto a salvar. A recusa encerra a ação. Esses controles funcionam com o backend ligado, mesmo com o Ollama desligado. Você também pode solicitar as ações em linguagem natural pelo chat.
