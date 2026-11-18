@@ -1,9 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, getStatus, sendMessage, type ChatResult, type Report } from './api';
 import { Reports } from './Reports';
 import { PersonalActions } from './PersonalActions';
 import { Microphone } from './Microphone';
-import { captureWindow, speakLocally, uploadMedia } from './media';
+import { captureWindow, uploadMedia } from './media';
+import { useVoice } from './useVoice';
+import { VoiceOrb } from './VoiceOrb';
 import './App.css';
 
 const actionLabels: Record<string, string> = {
@@ -26,9 +28,12 @@ function App() {
   const [online, setOnline] = useState(false);
   const [model, setModel] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
+  const messageList = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const voice = useVoice(setError);
+  const spokenApproval = useRef(false);
   const [listening, setListening] = useState(false);
   const [speak, setSpeak] = useState(false);
   const [approval, setApproval] = useState<Extract<ChatResult, { approval: unknown }>['approval'] | null>(null);
@@ -50,6 +55,10 @@ function App() {
     api<Report[]>('/reports').then(setReports).catch((failure: Error) => setError(failure.message));
   }, []);
 
+  useEffect(() => {
+    if (messageList.current) messageList.current.scrollTop = messageList.current.scrollHeight;
+  }, [messages]);
+
   function record(report: Report) {
     setReports((previous) => {
       const found = previous.some((item) => item.id === report.id);
@@ -69,12 +78,14 @@ function App() {
     }
   }
 
-  function show(result: ChatResult) {
+  function show(result: ChatResult, spoken = speak) {
     if ('approval' in result) {
       setApproval(result.approval);
+      spokenApproval.current = spoken;
+      if (spoken) void voice.play('Preciso da sua autorização. Confira a ação no painel.');
     } else {
       setMessages((previous) => [...previous, { role: 'assistant', content: result.response }]);
-      if (speak && !speakLocally(result.response)) setError('Nenhuma voz local em português do Brasil está disponível no navegador.');
+      if (spoken) void voice.play(result.response);
     }
   }
 
@@ -84,35 +95,62 @@ function App() {
     return report;
   }
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    const message = input.trim();
-    if (!message || busy || approval || listening) return;
+  async function sendPrompt(message: string, spoken: boolean) {
     setMessages((previous) => [...previous, { role: 'user', content: message }]);
     setInput('');
     const lower = message.toLocaleLowerCase('pt-BR');
     const matches = projects.filter((item) => lower.includes(item.toLocaleLowerCase('pt-BR')));
     const target = matches.length === 1 && /revis|relat[oó]rio/.test(lower) ? matches[0] : '';
-    void action(target ? 'Consultando projeto' : 'Consultando modelo', async () => {
-      if (target) {
-        await createReview(target, /teste|pytest/.test(lower));
-        show({ response: `Relatório de ${target} disponível no painel de projetos.` });
-        return;
-      }
-      show(await sendMessage(message));
-    });
+    setBusy(target ? 'Consultando projeto' : 'Processando pedido');
+    if (target) {
+      await createReview(target, /teste|pytest/.test(lower));
+      show({ response: `Relatório de ${target} disponível no painel de projetos.` }, spoken);
+      return;
+    }
+    show(await sendMessage(message), spoken);
   }
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    const message = input.trim();
+    if (!message || busy || approval || listening) return;
+    if (speak) voice.prepare();
+    void action('Processando pedido', () => sendPrompt(message, speak));
+  }
+
+  const voiceState = listening ? 'listening' : approval ? 'approval' :
+    busy ? 'thinking' : voice.speaking ? 'speaking' : 'idle';
+  const voiceStatus = listening ? 'Ouvindo você' : approval ? 'Aguardando sua aprovação' :
+    busy || (voice.speaking ? 'Atlas falando' : 'Pronto para conversar');
 
   return <main className="dashboard">
     <header className="dashboard-header">
-      <div><h1>{name}</h1><p>Assistente pessoal local</p></div>
-      <p className="status" role="status"><span />{(listening ? 'Ouvindo' : busy) || (approval ? 'Aguardando sua decisão' : online ? 'Painel conectado' : 'Sem conexão')}{model && <small>{model}</small>}</p>
+      <div className="brand"><span className="brand-mark" aria-hidden="true" /><h1>{name}</h1></div>
+      <div className="connection"><span className="status" data-online={online}><span />{online ? 'Conectado' : 'Sem conexão'}</span>{model && <small>{model}</small>}</div>
     </header>
     {error && <p className="error" role="alert">{error}</p>}
     <div className="layout">
+      <section className="card voice-console" aria-label="Conversa por voz">
+        <VoiceOrb state={voiceState} level={voice.level} />
+        <div className="voice-guide">
+          <h2 role="status">{online ? voiceStatus : 'Aguardando conexão'}</h2>
+          <p>Fale naturalmente. Uma pausa envia sua pergunta.</p>
+          <div className="actions voice-controls">
+            <Microphone disabled={!online || !!busy || !!approval} onError={setError}
+              audioContext={() => { voice.stop(); return voice.prepare(); }}
+              onLevel={voice.setLevel} onState={setListening} onAudio={(blob) => {
+                void action('Transcrevendo sua fala', async () => {
+                  const { text } = await uploadMedia<{ text: string }>('/transcribe', blob);
+                  await sendPrompt(text, true);
+                });
+              }} />
+            {voice.speaking && <button type="button" onClick={voice.stop}>Parar voz</button>}
+          </div>
+        </div>
+      </section>
       <section className="card chat" aria-label="Conversa">
         <h2>Conversa</h2>
-        <div className="messages" aria-live="polite">
+        <div className="messages" ref={messageList} aria-live="polite">
           {!messages.length && <p className="muted">Escreva um pedido para começar.</p>}
           {messages.map((message, index) => <article key={index} className={message.role}>
             <strong>{message.role === 'user' ? 'Você' : name}</strong>
@@ -128,9 +166,11 @@ function App() {
             ? String(approval.arguments.url) : JSON.stringify(approval.arguments, null, 2)}</pre>}
           <div className="actions">{[true, false].map((approved) =>
             <button key={String(approved)} disabled={!!busy} onClick={() => {
+              if (spokenApproval.current) voice.prepare();
+              voice.stop();
               void action('Processando decisão', async () => {
                 setApproval(null);
-                show(await api<ChatResult>(`/approvals/${approval.id}`, { approved }));
+                show(await api<ChatResult>(`/approvals/${approval.id}`, { approved }), spokenApproval.current);
               });
             }}>{approved ? 'Aprovar' : 'Recusar'}</button>)}</div>
         </section>}
@@ -139,11 +179,6 @@ function App() {
           <button disabled={!input.trim() || !!busy || !!approval || listening}>Enviar</button>
         </form>
         <div className="actions media">
-          <Microphone disabled={!!busy || !!approval} onError={setError} onState={setListening} onAudio={(blob) => {
-            void action('Transcrevendo', async () => {
-              setInput((await uploadMedia<{ text: string }>('/transcribe', blob)).text);
-            });
-          }} />
           <button disabled={!!busy || !!approval || listening} onClick={() => {
             const question = input.trim() || 'Descreva o que está visível nesta janela.';
             void action('Lendo janela', async () => {
@@ -156,9 +191,9 @@ function App() {
           }}>Ler janela ou aba</button>
           <label className="checkbox"><input type="checkbox" checked={speak} onChange={(event) => {
             setSpeak(event.target.checked);
-            if (!event.target.checked) window.speechSynthesis?.cancel();
-          }} /> Ler respostas</label>
-          {speak && <button onClick={() => window.speechSynthesis?.cancel()}>Parar voz</button>}
+            if (event.target.checked) voice.prepare();
+            else voice.stop();
+          }} /> Ler também respostas digitadas</label>
         </div>
       </section>
       <aside className="side-panel">

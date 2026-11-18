@@ -38,15 +38,3 @@ export async function captureWindow(): Promise<Blob> {
     stream.getTracks().forEach((track) => track.stop());
   }
 }
-
-export function speakLocally(text: string): boolean {
-  if (!('speechSynthesis' in window)) return false;
-  const voice = window.speechSynthesis.getVoices().find((item) => item.localService && item.lang.toLowerCase() === 'pt-br');
-  if (!voice) return false;
-  const speech = new SpeechSynthesisUtterance(text);
-  speech.lang = 'pt-BR';
-  speech.voice = voice;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(speech);
-  return true;
-}

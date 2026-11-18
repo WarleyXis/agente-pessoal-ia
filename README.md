@@ -53,8 +53,9 @@ Relatórios de Git e pytest são uma ferramenta opcional. Para habilitá-la, cad
 
 ## Microfone, voz e janela
 
-- Escolha **Microfone**, fale e pressione **Transcrever gravação**. Confira o texto antes de enviar. A primeira transcrição pode baixar o modelo Whisper `small`, que roda localmente nas chamadas seguintes.
-- Ative **Ler respostas** para usar uma voz local em português do Brasil instalada no Windows e disponível no navegador. Use **Parar voz** para interromper a leitura.
+- Clique em **Falar com o Atlas** e faça uma pergunta. Depois de uma pausa na fala (ou ao clicar em **Enviar fala**), o Atlas transcreve, envia o pedido e responde por voz. Clique em **Falar com o Atlas** novamente para outro turno. **Cancelar** descarta a gravação. A primeira transcrição pode baixar o modelo Whisper `small`, que roda localmente.
+- A esfera acompanha o ponteiro e reage ao volume do microfone e da resposta em áudio. A síntese usa uma voz pt-BR instalada no Windows. Quando o motor do Windows estiver indisponível, o Atlas tenta uma voz local pt-BR do navegador, animada pelo ritmo das palavras. A resposta sempre fica visível no chat.
+- Use **Parar voz** para interromper a leitura. **Ler também respostas digitadas** ativa a voz para pedidos de texto. As ações que exigem autorização continuam aguardando sua decisão no painel.
 - Escolha **Ler janela ou aba**, selecione uma janela ou aba no navegador e deixe o Ollama analisar a captura. Se quiser fazer uma pergunta específica, escreva-a antes de clicar. A captura é pontual e a sessão de compartilhamento é encerrada logo depois.
 - Os modos de terminal continuam disponíveis com `python -m backend.main` e `python -m backend.voice_main`, usando o Python do ambiente virtual.
 

@@ -1,14 +1,18 @@
+import subprocess
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Annotated
 
 import requests
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from PIL import Image, UnidentifiedImageError
+from pydantic import BaseModel, StringConstraints
 from starlette.concurrency import run_in_threadpool
 
 from backend.memory.store import save_turn
 from backend.tools.vision_tools import describe_image
+from backend.voice.windows_audio import synthesize_wav
 
 router = APIRouter(prefix="/api")
 MAX_MEDIA_BYTES = 5 * 1024 * 1024
@@ -72,3 +76,16 @@ def inspect_image(image: bytes, question: str) -> str:
 async def post_vision(request: Request, question: str = Query(min_length=1, max_length=1000)) -> dict:
     _, image = await read_media(request, {"image/png"})
     return {"response": await run_in_threadpool(inspect_image, image, question)}
+
+
+class SpeechRequest(BaseModel):
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=3000)]
+
+
+@router.post("/speak")
+def speak(request: SpeechRequest) -> Response:
+    try:
+        audio = synthesize_wav(request.text)
+    except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+        raise HTTPException(503, "Confira se há uma voz em português do Brasil instalada no Windows.") from error
+    return Response(audio, media_type="audio/wav", headers={"Cache-Control": "no-store"})
